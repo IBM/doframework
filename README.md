@@ -184,7 +184,7 @@ if __name__ == '__main__':
 
 # KiND
 
-A KiND cluster simulates a Kubernetes cluster without the need to dockerize. However, it does assume that you have [Docker](https://docs.docker.com/get-docker/ "Get Docker") installed and configured.
+A KiND cluster simulates a Kubernetes cluster without the need to dockerize. However, it still requires [Docker](https://docs.docker.com/get-docker/ "Get Docker") installed and configured.
 
 Here's how to set up KiND on a Mac. First install `Go`. Here's how that's done with `homebrew`.
 ```
@@ -249,7 +249,7 @@ Log into IBM cloud services and follow the instructions.
 ```
 $ ibmcloud login --sso
 ```
-Generate a token for your openshift cluster (good for 24HR). Go to https://cloud.ibm.com (make sure you web connection has access rights). Click on OpenShift Web Console [top right]. Click on `IAM#user` and look for Copy Login Command. Copy the login command [`oc login ...`].
+Generate a token for your openshift cluster (good for 24HR). Go to https://cloud.ibm.com (make sure your connection has access rights). Click on OpenShift Web Console (top right). Click on `IAM#user` and look for `Copy Login Command`. Copy the login command (`oc login ...`).
 ```
 $ oc login --token=shaxxx~xxxx --server=https://xxx.xx-xx.xx.cloud.ibm.com:xxxxx
 ```
