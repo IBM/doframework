@@ -16,7 +16,7 @@ The framework relies on cloud object storage (COS) to interact with simulation p
 
 The user provides COS specifications in the form of a `configs.yaml`. 
 
-The `configs.yaml` includes the list of source and target bucket names (under `s3:buckets`). Credentials are added under their designated fields.
+The `configs.yaml` includes the list of source and target bucket names (under `s3:buckets`). Credentials are added under designated fields.
 
 ```
 s3:
@@ -36,9 +36,9 @@ s3:
 
 # Input
 
-The application will run end to end and produce results assuing a `input.json` files are uploaded to S3 bucket `<inputs_bucket>`. 
+The application will run end to end and produce results assuing a `input.json` files are uploaded to `<inputs_bucket>`. 
 
-Here is the basic format of an input file (see `input_basic.json` under `inputs`).
+Here is an input file (see input samples `input_basic.json` and `input_all.json` under `inputs`).
 
 
 ```
@@ -75,6 +75,8 @@ Here is the basic format of an input file (see `input_basic.json` under `inputs`
 `data:noise`: Response variable noise.<br>
 `data:policy_num`: Number Gaussians in mixed Gaussian distribution of data points.<br>
 `data:scale`: Upper bound on standard deviation of Gaussians in mixed Gaussian distribution of data points as a ratio of objective target domain diameter.
+
+The jupyter notebook `inputs.ipynb` under `notebooks` allows you to automatically generate input files and upload them to `<inputs_bucket>`
 
 # Install
 
@@ -129,19 +131,19 @@ $ doframework-setup.sh --project-dep <dep>
 
 # Run
 
-The testing framework is invoked within your application, as in the script `module.py` below. 
+The testing framework is invoked within a user's application, for example, `module.py` below. 
 
 Your model will be integrated into the testing framework, once it is decorated with `doframework.resolve`. 
 
 The framework supports the following inputs to your model: 
 
-`data`: <br>
-`constraints`: Linear constraints as a 2D array <br>
-`lower_bound`: Upper bound per feature variable.<br>
-`upper_bound`: Lower bound per feature variable.<br>
+`data`: 2D np.array with features X = data[ : , :-1] and response variable y = data[ : ,-1].<br>
+`constraints`: Linear constraints as a 2D numpy array A. x satisfies constraints if A[ : , :-1]@x + A[ : ,-1] $\leq 0$.<br>
+`lower_bound`: Lower bound per feature variable.<br>
+`upper_bound`: Upper bound per feature variable.<br>
 `init_value`: Optimization initial value.<br>
 
-Run the experiment with `doframework.run()`. The `run` methods accepts your decorated model and a relative path to your `configs.yaml`. It also accepts the keyword arguments:
+An experiment runs with `doframework.run()`, which accepts your decorated model and a relative path to your `configs.yaml`. It also accepts the keyword arguments:
 
 `objectives`: The number of objective targets to generate per input file.<br>
 `datasets`: The number of datasets to generate per objective target.<br>
@@ -150,8 +152,7 @@ Run the experiment with `doframework.run()`. The `run` methods accepts your deco
 `logger`: True to see logs, False otherwise.<br>
 `after_idle_for`: Stop running when event stream is idle after this many seconds.<br>
 
-
-products, for example, the number of objective targets to be generated. 
+Here is an example `module.py` applicarion. 
 
 ```
 import doframework as dof
@@ -170,7 +171,7 @@ if __name__ == '__main__':
 
 A KiND cluster simulates a Kubernetes cluster without the need to dockerize. However, it does assume that you have [Docker](https://docs.docker.com/get-docker/ "Get Docker") installed and configured.
 
-Here's how to set up KiND on a Mac. We first need to install `Go`. Here's how that's done with `homebrew`.
+Here's how to set up KiND on a Mac. First install `Go`. Here's how that's done with `homebrew`.
 ```
 $ export GOPATH="${HOME}/.go"
 $ export GOROOT="$(brew --prefix golang)/libexec"
@@ -180,12 +181,18 @@ $ test -d "${GOPATH}/src/github.com" || mkdir -p "${GOPATH}/src/github.com"
 $ brew install go
 ```
 
-Now we're ready to install [KiND](https://kind.sigs.k8s.io/docs/user/quick-start "KiND quick start")
+Now install [KiND](https://kind.sigs.k8s.io/docs/user/quick-start "KiND quick start")
 ```
 $ brew install kind
 ```
 
-We're ready to run the `module.py` script on the cluster.
+Set up the cluster by running the bash script `doframework-setup.sh`. The ` --skip` flag will tell the script not to generate `doframework.yaml` again. 
+```
+$ cd <user_project_folder>
+$ doframework-setup.sh --kind  --skip
+```
+
+Run an application `module.py` on the [KiND](https://kind.sigs.k8s.io/docs/user/quick-start "KiND quick start") cluster with.
 ```
 $ ray submit doframework.yaml module.py
 ```
@@ -212,7 +219,7 @@ Any changes to `doframework.yaml` can be updated with
 $ ray up doframework.yaml --no-config-cache --yes
 ```
 
-Once we're done playing with KiND, we should clean up everything with
+Once you're done, clean up with
 ```
 $ kind delete cluster
 $ docker stop registry
@@ -236,16 +243,26 @@ If you haven't already, define a new ray project [done once].
 ```
 $ oc new-project ray
 ```
-If you have already estalished project "ray", you'll be able to find it with `oc projects`.
+If you have already defined the "ray" project, you'll find it under `oc projects`.
 
-Before running your application, make sure you uploaded `input.json` file(s) to your S3 bucket `<inputs_bucket>`.
+Upload `input.json` file(s) to your S3 bucket `<inputs_bucket>`.
 
-Submit the application to the ray cluster
+Run the bash script `doframework-setup.sh` to establish the `ray` cluster. Use the `--skip` flag to skip generating a new `doframework.yaml` file.
+```
+$ cd <user_project_folder>
+$ doframework-setup.sh --skip
+```
+If you are familiar with `ray` you can run instead 
+```
+$ ray up doframework.yaml --no-config-cache --yes
+```
+
+Submit the application to the `ray` cluster
 ```
 $ ray submit doframework.yaml module.py
 ```
 
-Changing cluster resource allocation is done through `doframework.yaml`. You can change `max_workers`, for instance, to the max CPUs you have available [but keep max_workers of head node at 0]. You can play with `resources: requests: cpu, memory` and `resources: limits: cpu, memory` for the head and worker nodes. 
+Changing cluster resource allocation is done through `doframework.yaml`. Change `max_workers` to the max CPUs you have available [but keep max_workers of head node at 0]. You can play with `resources: requests: cpu, memory` and `resources: limits: cpu, memory` for the head and worker nodes. 
 
 After introducing changes to `doframework.yaml`, update with
 ```
@@ -287,7 +304,7 @@ $ ray down -y doframework.yaml
 
 # CPLEX
 
-In case your application relies on a commercial solver, such as `CPLEX`, you will need to mount it onto cluster nodes.
+In case your application relies on a commercial solver, such as `CPLEX`, you will need to mount it onto cluster nodes, if you wish to run your application on an OpenShift cluster.
 
 To allow for a silent installation of `CPLEX`, create a `installer.properties` file under your project folder. Add the following lines to your `installer.properties` file:
 ```
@@ -323,6 +340,10 @@ $ ray up doframework.yaml --no-config-cache --yes
 ```
 
 # Issues
+
+## Idle
+
+Issues relating to an experiment apparently hanging or not going full cycle may have to do with `after_idle_for`. There is enough time window for simulation products to make it to the next stage. Set a large value (in seconds) to be on the safe side.
 
 ## Autoscaling
  
@@ -364,7 +385,7 @@ Running the bash script `doframework-setup.sh`, you may encounter the following
 Error from server (BadRequest): pod rayvens-cluster-head-mcsfh does not have a host assigned
     SSH still not available (Exit Status 1): kubectl -n ray exec -it rayvens-cluster-head-mcsfh -- bash --login -c -i 'true && source ~/.bashrc && export OMP_NUM_THREADS=1 PYTHONWARNINGS=ignore && (uptime)', retrying in 5 seconds.
 ```
-Just wait, and eventually you'll go through. 
+Just wait. Eventually it'll go through. 
 
 ---------------
 
@@ -378,17 +399,17 @@ error: You must be logged in to the server (Unauthorized)
 error: failed to create clusterrolebinding: Unauthorized
 error: You must be logged in to the server (Unauthorized)
 ```
-This is an indication that you haven't logged in. See login instructions below.
+This is an indication that you haven't logged into your cluster. See login instructions below.
 
 ---------------
 
 ## rayvens Image Update
-Any version updates of rayvens [image](https://quay.io/repository/ibm/rayvens?tab=tags) can be editted in `doframework.yaml` under `containers: ... image: quay.io/ibm/rayvens:0.4.0`.
+Any version updates of rayvens [image](https://quay.io/repository/ibm/rayvens?tab=tags) can be editted in `doframework.yaml` under `containers: ... image: quay.io/ibm/rayvens:0.X.X`.
 
 ---------------
 
 ## Nothing Generated
-If you only see `kamel` subprocesses after hitting `ray submit`, it's likely you forgot to upload `input.json` files to S3 bucket `<inputs_bucket>`.
+If you only see `kamel` subprocesses after hitting `ray submit`, it's likely you forgot to upload `input.json` files to S3 bucket `<inputs_bucket>`. You can upload then now -- no need to stop the experiment.
 
 ---------------
 
