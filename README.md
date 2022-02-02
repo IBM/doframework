@@ -128,7 +128,6 @@ Using the option `--project-dep` will allow you to specify additional applicatio
 $ doframework-setup.sh --project-dep <dep>
 ```
 
-
 # Run
 
 The testing framework is invoked within a user's application, for example, `module.py` below. 
@@ -152,7 +151,7 @@ An experiment runs with `doframework.run()`, which accepts your decorated model 
 `logger`: True to see logs, False otherwise.<br>
 `after_idle_for`: Stop running when event stream is idle after this many seconds.<br>
 
-Here is an example `module.py` applicarion. 
+Here is an example `module.py` application. 
 
 ```
 import doframework as dof
