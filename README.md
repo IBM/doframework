@@ -22,7 +22,7 @@
 
 # Requirements
 
-`doframework` is written for Python version >= 3.9.0. 
+`doframework` was written for Python version >= 3.9.0. 
 
 The testing framework can run locally or remotely. For optimal performance, run it on an OpenShift cluster.
 
