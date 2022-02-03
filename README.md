@@ -18,7 +18,28 @@
 
 `doframework` is a testing framework for data-driven decision-optimization algorithms. 
 
-`doframework` integrates with the user's data-driven decision-optimization application written in Python.
+A decision-optimization algorithm looks for the optimal setup $x^*$ of some system described by a real-valued function $f$
+$$
+x^* \in \arg \min_{x \in \Omega} f(x)
+$$
+
+Data-driven algorithms use data to establish some surrogate for $f$.
+
+The testing framework randomly generates optimization problems $(f,\Omega,D,x^*)$: 
+* $f$ is a randomly generated piece-wise linear function over a domain in $\mathbb{R}^d$ ($d>1$)
+* $\Omega \subseteq \mathbb{R}^d$ is some feasibility region defined by linear constraints 
+* $D = (X \subseteq \mathbb{R}^d,y)$ is some dataset derived for $f$
+* $x^*$ is the true solution to the optimization problem
+
+The testing framework feeds the constraints and the data $(\Omega,D)$ into the user's algorithm, and collects its predicted optimum. The predicted optimum can then be conpared to the true optimum. This produces a performance profile for the user's algorithm.
+
+`doframework` integrates easily with the user's data-driven decision-optimization algorithm written in Python.
+
+# Design
+
+`doframework` was designed for optimal cloud distribution performance. It was implemented using an event-driven cloud desitribution approach. 
+
+`doframework` was built on top of [ray](https://www.ray.io/ "Ray -- fast and simple distributed computing") and [rayvens](https://github.com/project-codeflare/rayvens "Rayvens augments Ray with events").
 
 # Requirements
 
@@ -26,7 +47,7 @@
 
 The testing framework can run locally or remotely. For optimal performance, run it on an OpenShift cluster.
 
-The framework relies on cloud object storage (COS) to interact with simulation products.
+The framework relies on Cloud Object Storage (COS) to interact with simulation products.
 
 # Configs
 
@@ -49,12 +70,33 @@ s3:
     endpoint_url: 'https://xxx.xxx.xxx'
     region: 'xx-xxxx'
 ```
+The buckets must be **distinct**.
 
-# Input
+# Install
 
-The application will run end to end and produce results assuing a `input.json` files are uploaded to `<inputs_bucket>`. 
+To run `doframework` scripts locally install with
 
-Here is an input file (see input samples `input_basic.json` and `input_all.json` under `inputs`).
+```
+$ pip install doframework
+```
+
+To run `doframework` on an OpenShift cluster, `cd` into your project's folder and run the setup bash script `doframework-setup.sh`. Make sure to log in first (see OpenShift Login below). The setup script will generate a `doframework.yaml` file in your project's folder.
+```
+$ cd <user_project_folder>
+$ doframework-setup.sh
+```
+
+To run `doframework` on a KiND cluster, run the setup bash script with the `--kind` option. 
+```
+$ cd <user_project_folder>
+$ doframework-setup.sh --kind
+```
+
+# Inputs
+
+The application will run end to end and produce results assuing `input.json` files are uploaded to `<inputs_bucket>`. They provide meta data for the random genration of optimization problems.
+
+Here is an example input file (see input samples `input_basic.json` and `input_all.json` under `inputs`).
 
 
 ```
@@ -82,37 +124,29 @@ Here is an input file (see input samples `input_basic.json` and `input_all.json`
 }
 ```
 
-`f:vertices:num`: The number of vertices in the objective target piece-wise linear graph.<br>
-`f:vertices:range`: Objective target domain will be contained in this box range.<br>
-`f:values:range`: Objective target values will range within this interval.<br>
-`omega:ratio`: feasibility regions volume / objective target domain volume > ratio.<br>
-`omega:scale`: Upper bound on standard deviation of sampled feasibility region jitter (as a ratio of domain diameter).<br>
+`f:vertices:num`: The number of vertices in $f$'s piece-wise linear graph.<br>
+`f:vertices:range`: $f$ domain will be inside this box range.<br>
+`f:values:range`: range of $f$ values.<br>
+`omega:ratio`: $\text{vol}(\Omega) / \text{vol}(\text{dom}(f)) \geq$ ratio.<br>
+`omega:scale`: Upper bound on STD of sampled feasibility region jitter (as a ratio of $\text{dom}(f)$ diameter).<br>
 `data:N`: Number of data points to sample.<br>
-`data:noise`: Response variable noise.<br>
-`data:policy_num`: Number Gaussians in mixed Gaussian distribution of data points.<br>
-`data:scale`: Upper bound on standard deviation of Gaussians in mixed Gaussian distribution of data points as a ratio of objective target domain diameter.
+`data:noise`: Response variable $y$ noise.<br>
+`data:policy_num`: Number of Gaussians in Gaussian mix distribution of data points.<br>
+`data:scale`: Upper bound on STD of Gaussians in Gaussian mix distribution of data points (as a ratio of $\text{dom}(f)$ diameter).
 
-The jupyter notebook `inputs.ipynb` under `notebooks` allows you to automatically generate input files and upload them to `<inputs_bucket>`
+The jupyter notebook `./notebooks/inputs.ipynb` allows you to automatically generate input files and upload them to `<inputs_bucket>`.
 
-# Install
+It's a good idea to start experimenting on low dimensional problems. 
 
-To run `doframework` scripts locally install with
+# Outputs
 
-```
-$ pip install doframework
-```
+`doframework` produces three types of files as experiment byproducts:
 
-To run `doframework` on an OpenShift cluster, `cd` into your project's folder and run the setup bash script `doframework-setup.sh`. Make sure to log in first (see OpenShift Login below). The setup script will generate a `doframework.yaml` file in your project's folder.
-```
-$ cd <user_project_folder>
-$ doframework-setup.sh
-```
+* `objective.json`: containing information on $(f,\Omega,x^*)$ 
+* `data.csv`: containing the dataset fed into the algorithm
+* `solution.json`: containing the algorithm's predicted optimum
 
-To run `doframework` on a KiND cluster, run the setup bash script with the `--kind` option. 
-```
-$ cd <user_project_folder>
-$ doframework-setup.sh --kind
-```
+Find sample files under `./outputs`/
 
 # Test
 
@@ -215,7 +249,7 @@ At this point we may encounter the following.
 ```
 RuntimeError: Head node of cluster (rayvens-cluster) not found!
 ```
-This is typically a resource allocation issue. To investigate this issue further, we would want to have [kubectl](https://kubernetes.io/docs/tasks/tools/ "Install kubectl") installed, so we can identify our head node and see what gives
+This is typically a resource allocation issue. To investigate this issue, make sure you have the [kubectl](https://kubernetes.io/docs/tasks/tools/ "Install kubectl") CLI installed. Look for the `rayvens-cluster-head` node
 ```
 $ kubectl get pods -n ray
 $ kubectl describe pod rayvens-cluster-head-xxsfh -n ray
@@ -229,12 +263,12 @@ Events:
 ```
 One quick way to resolve the issue is to go to the Docker Desktop and look under Resources -> Advanced. Play with the number of CPUs / Memory GBs, but don't go crazy, otherwise your machine will start running really ... really ... s-l-o-w.
 
-Any changes to `doframework.yaml` can be updated with
+Any resource allocation changes to `doframework.yaml` can be updated with
 ```
 $ ray up doframework.yaml --no-config-cache --yes
 ```
 
-Once you're done, clean up with
+Once you're done with KiND, clean up
 ```
 $ kind delete cluster
 $ docker stop registry
@@ -354,13 +388,28 @@ Now update your `ray` cluster
 $ ray up doframework.yaml --no-config-cache --yes 
 ```
 
+# OpenShift Login
+
+This assumes you have `ibmcloud` and `oc` CLI set up.
+
+Log into IBM cloud services and follow the instructions.
+```
+$ ibmcloud login --sso
+```
+Generate a token for your openshift cluster (good for 24hrs). Go to https://cloud.ibm.com (make sure your web connection has access rights). Click on `OpenShift Web Console` (top right). Click on your IAM\#user and look for `Copy Login Command`. Copy the login command [`oc login ...`]. Now run it
+```
+$ oc login --token=shaxxx~xxxx --server=https://xxx.xx-xx.xx.cloud.ibm.com:xxxxx
+```
+
 # Issues
 
 ## Idle
 
-Issues relating to an experiment apparently hanging or not going full cycle may have to do with `after_idle_for`. There is enough time window for simulation products to make it to the next stage. Set a large value (in seconds) to be on the safe side.
+When an experiment goes idle, or it does not go through full cycle, this may have to do with `after_idle_for`. 
 
-## Autoscaling
+The `after_idle_for` time window should be sufficiently large for simulation products to make it through to the next stage. This is especially true when optimization problem dimensions are higher, or when your algorithm takes longer.
+
+## Autoscaling on OpenShift
  
  If you're having problems with scaling, e.g.., the app is only running on the head node, you can start by checking the `ray` logs with
 ```
@@ -381,9 +430,11 @@ $ oc adm policy add-scc-to-group anyuid system:authenticated
 
 ---------------
 
-## Consumed Uploaded Files
+## Consumed Uploads
 
-When the application fails to shutdown properly, some `kamel` processes may keep running, consuming any file uploaded to COS S3 buckets. You’ll be able to identify them as source type processes with
+When files magically disappear when you upload them to the COS buckets, it may be that some `kamel` processes are still running, consuming any uploaded file. 
+
+You may be able to identify these `kamel` processes as source type processes with
 ```
 $ kubectl get all
 ```
@@ -391,11 +442,12 @@ To delete, use
 ```
 $ kamel delete source-data source-inputs 
 ```
+If that doesn't work, try shutting down `ray`.
 
 ---------------
 
 ## SSH Unavailable
-Running the bash script `doframework-setup.sh`, you may encounter the following 
+Running the bash script `doframework-setup.sh`, or the `ray up` command, you may encounter the following 
 ```
 Error from server (BadRequest): pod rayvens-cluster-head-mcsfh does not have a host assigned
     SSH still not available (Exit Status 1): kubectl -n ray exec -it rayvens-cluster-head-mcsfh -- bash --login -c -i 'true && source ~/.bashrc && export OMP_NUM_THREADS=1 PYTHONWARNINGS=ignore && (uptime)', retrying in 5 seconds.
@@ -405,6 +457,7 @@ Just wait. Eventually it'll go through.
 ---------------
 
 ## Login
+
 When running `doframework-setup.sh`, you may see
 ```
 --- creating namespace
@@ -414,33 +467,27 @@ error: You must be logged in to the server (Unauthorized)
 error: failed to create clusterrolebinding: Unauthorized
 error: You must be logged in to the server (Unauthorized)
 ```
-This is an indication that you haven't logged into your cluster. See login instructions below.
+This is an indication that you haven't logged into your cluster (see login instructions above). 
+
+The `doframework.yaml` was generated, though!
 
 ---------------
 
 ## rayvens Image Update
+
 Any version updates of rayvens [image](https://quay.io/repository/ibm/rayvens?tab=tags) can be editted in `doframework.yaml` under `containers: ... image: quay.io/ibm/rayvens:0.X.X`.
 
 ---------------
 
 ## Nothing Generated
-If you only see `kamel` subprocesses after hitting `ray submit`, it's likely you forgot to upload `input.json` files to S3 bucket `<inputs_bucket>`. You can upload then now -- no need to stop the experiment.
+
+If you only see `kamel` subprocesses after hitting `ray submit`, it's likely you haven't uploaded `input.json` files to `<inputs_bucket>`. You can upload then now -- no need to stop the experiment.
 
 ---------------
 
 ## RayOutOfMemoryError
 
-You may run into insufficient memory errors such as `RayOutOfMemoryError: More than 95% of the memory on node rayvens-cluster-head-xxxxx is used`. Make sure you have enough memory on your cluster and increase memory allowance in `doframework.yaml` under `resources:requests:memory:` and `resources:limits:memory:`.
+You may run into insufficient memory errors such as `RayOutOfMemoryError: More than 95% of the memory on node rayvens-cluster-head-xxxxx is used`. 
 
-# OpenShift Login
+Make sure you have enough memory on your cluster and increase memory allowance in `doframework.yaml` under `resources:requests:memory:` and `resources:limits:memory:`.
 
-This assumes you have `ibmcloud` and `oc` CLI set up.
-
-Log into IBM cloud services and follow the instructions.
-```
-$ ibmcloud login --sso
-```
-Generate a token for your openshift cluster (good for 24HR). Go to https://cloud.ibm.com (make sure you web connection has access rights). Click on OpenShift Web Console [top right]. Click on IAM\#user and look for Copy Login Command. Copy the login command [`oc login ...`].
-```
-$ oc login --token=shaxxx~xxxx --server=https://xxx.xx-xx.xx.cloud.ibm.com:xxxxx
-```
