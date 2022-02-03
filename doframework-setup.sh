@@ -25,6 +25,7 @@ mem="2G"
 project_dir=""
 project_requirements_file=""
 project_dependencies="gcc" # GPy
+project_pip="doframework"
 
 while [ -n "$1" ]; do
     case "$1" in
@@ -77,6 +78,7 @@ params+=("--namespace $namespace")
 if [ -z "$skip" ]; then
     params+=("--cpu $cpu")
     params+=("--mem $mem")
+    params+=("--project-pip-dep $project_pip")
     if [ -n "$install_project" ]; then
         params+=("--install-project")
         params+=("--project-dir $PWD/$project_dir")
