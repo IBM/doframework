@@ -98,7 +98,7 @@ rayvens-setup.sh ${params[@]}
 
 if [ -n "$example" ]; then
     echo "--- generating example file doframework_example.py"
-    echo "--- try running 'python doframework_example.py $config' "
+    echo "--- try running 'python doframework_example.py --configs configs.yaml' "
     cat > doframework_example.py << EOF
 #
 # Copyright IBM Corporation 2021
@@ -118,10 +118,10 @@ if [ -n "$example" ]; then
 
 import argparse
 import numpy as np
-import e2e
+import doframework as dof
 from doframework.core.optimizer import predict_optimize
 
-@doframework.resolve
+@dof.resolve
 def predict_optimize_resolved(data: np.array, constraints: np.array, **kwargs):
     return predict_optimize(data, constraints, **kwargs)
 
@@ -131,6 +131,6 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--configs", type=str, help="User configs.yaml.")
     args = parser.parse_args()
     
-    doframework.run(predict_optimize_resolved, args.configs, objectives=2, datasets=2)
+    dof.run(predict_optimize_resolved, args.configs, objectives=2, datasets=2)
 EOF
 fi
