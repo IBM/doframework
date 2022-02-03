@@ -16,24 +16,19 @@
 
 # DOFramework
 
-`doframework` is a testing framework for data-driven decision-optimization algorithms. 
+`doframework` is a testing framework for data-driven decision-optimization algorithms. It integrates easily with the user's data-driven decision-optimization algorithm written in Python.
 
-A decision-optimization algorithm looks for the optimal setup $x^*$ of some system described by a real-valued function $f$
-$$
-x^* \in \arg \min_{x \in \Omega} f(x)
-$$
+A decision-optimization algorithm looks for the optimal setup x* of some system described by a real-valued function f in some feasibility region O. Data-driven algorithms use data to establish some surrogate for f.
 
-Data-driven algorithms use data to establish some surrogate for $f$.
+The testing framework randomly generates optimization problems instances (f,O,D,x*): 
+* f is a randomly generated piece-wise linear function over a domain in d-dimensional space (d>1).
+* O is some feasibility region in the domain of f, defined by linear constraints.
+* D = (X,y) is some dataset derived for f.
+* x* is the true optimum of f in O.
 
-The testing framework randomly generates optimization problems $(f,\Omega,D,x^*)$: 
-* $f$ is a randomly generated piece-wise linear function over a domain in $\mathbb{R}^d$ ($d>1$)
-* $\Omega \subseteq \mathbb{R}^d$ is some feasibility region defined by linear constraints 
-* $D = (X \subseteq \mathbb{R}^d,y)$ is some dataset derived for $f$
-* $x^*$ is the true solution to the optimization problem
+The testing framework feeds the constraints and the data (O,D) into the user's algorithm, and collects its predicted optimum. The predicted optimal value can then be conpared to the true optimal value f(x*). 
 
-The testing framework feeds the constraints and the data $(\Omega,D)$ into the user's algorithm, and collects its predicted optimum. The predicted optimum can then be conpared to the true optimum. This produces a performance profile for the user's algorithm.
-
-`doframework` integrates easily with the user's data-driven decision-optimization algorithm written in Python.
+This way, `doframework` produces a performance profile for the user's algorithm.
 
 # Design
 
@@ -124,15 +119,15 @@ Here is an example input file (see input samples `input_basic.json` and `input_a
 }
 ```
 
-`f:vertices:num`: The number of vertices in $f$'s piece-wise linear graph.<br>
-`f:vertices:range`: $f$ domain will be inside this box range.<br>
-`f:values:range`: range of $f$ values.<br>
-`omega:ratio`: $\text{vol}(\Omega) / \text{vol}(\text{dom}(f)) \geq$ ratio.<br>
-`omega:scale`: Upper bound on STD of sampled feasibility region jitter (as a ratio of $\text{dom}(f)$ diameter).<br>
+`f:vertices:num`: The number of vertices in f's piece-wise linear graph.<br>
+`f:vertices:range`: f domain will be inside this box range.<br>
+`f:values:range`: range of f values.<br>
+`omega:ratio`: vol(O) / vol(dom(f)) >= ratio.<br>
+`omega:scale`: Upper bound on STD of sampled feasibility region jitter (as a ratio of dom(f) diameter).<br>
 `data:N`: Number of data points to sample.<br>
 `data:noise`: Response variable $y$ noise.<br>
 `data:policy_num`: Number of Gaussians in Gaussian mix distribution of data points.<br>
-`data:scale`: Upper bound on STD of Gaussians in Gaussian mix distribution of data points (as a ratio of $\text{dom}(f)$ diameter).
+`data:scale`: Upper bound on STD of Gaussians in Gaussian mix distribution of data points (as a ratio of dom(f) diameter).
 
 The jupyter notebook `./notebooks/inputs.ipynb` allows you to automatically generate input files and upload them to `<inputs_bucket>`.
 
@@ -142,7 +137,7 @@ It's a good idea to start experimenting on low dimensional problems.
 
 `doframework` produces three types of files as experiment byproducts:
 
-* `objective.json`: containing information on $(f,\Omega,x^*)$ 
+* `objective.json`: containing information on (f,O,x*) 
 * `data.csv`: containing the dataset fed into the algorithm
 * `solution.json`: containing the algorithm's predicted optimum
 
