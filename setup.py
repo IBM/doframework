@@ -15,9 +15,6 @@
 from setuptools import setup, find_packages
 import pathlib
 
-here = pathlib.Path(__file__).parent.resolve()
-long_description = (here / 'README.md').read_text(encoding='utf-8')
-
 install_requires = [
     'numpy>=1.20.1',
     'pandas>=1.1.5',
@@ -33,14 +30,21 @@ install_requires = [
     'GPy>=1.10.0'
 ]
 
-setup(
-    name='doframework',
-    version='0.1.0',
-    description='Testing framework for data-driven decision-optimization algorithms.',
-    long_description=long_description,
-    author='Orit Davidovich',
-    author_email='orit.davidovich@ibm.com',
-    packages=find_packages(include=['doframework', 'doframework.core', 'doframework.flow']),
-    install_requires=install_requires,
-    package_data={'doframework': ['notebooks/*.ipynb', 'inputs/*.json']},
-)
+setup(name='doframework',
+version='0.1.1',
+description='Testing framework for data-driven decision-optimization algorithms.',
+long_description_content_type="text/markdown",
+long_description=open('README.md').read(),
+author='Orit Davidovich',
+author_email='orit.davidovich@ibm.com',
+url="https://github.com/IBM/doframework",
+license="Apache-2.0",
+classifiers=[
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent"
+    ],
+packages=find_packages(include=['doframework', 'doframework.core', 'doframework.flow']),
+install_requires=install_requires,
+package_data={'doframework': ['notebooks/*.ipynb', 'inputs/*.json']},
+python_requires='>=3.9')

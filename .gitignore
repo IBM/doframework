@@ -22,3 +22,5 @@ __pycache__/
 doframework.egg-info/
 .DS_Store
 .python-version
+build
+dist

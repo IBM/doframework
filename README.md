@@ -36,18 +36,18 @@ The `configs.yaml` includes the list of source and target bucket names (under `s
 
 ```
 s3:
-  buckets: 
-    inputs: '<inputs-bucket>'
-    inputs_dest: '<inputs-dest-bucket>'
-    objectives: '<objectives-bucket>'
-    objectives_dest: '<objectives-dest-bucket>'
-    data: '<data-bucket>'
-    data_dest: '<data-dest-bucket>'
-    solutions: '<solutions-bucket>'
-  aws_secret_access_key: 'xxxx'
-  aws_access_key_id: 'xxxx'
-  endpoint_url: 'https://xxx.xxx.xxx'
-  region: 'xx-xxxx'
+    buckets:
+        inputs: '<inputs-bucket>'
+        inputs_dest: '<inputs-dest-bucket>'
+        objectives: '<objectives-bucket>'
+        objectives_dest: '<objectives-dest-bucket>'
+        data: '<data-bucket>'
+        data_dest: '<data-dest-bucket>'
+        solutions: '<solutions-bucket>'
+    aws_secret_access_key: 'xxxx'
+    aws_access_key_id: 'xxxx'
+    endpoint_url: 'https://xxx.xxx.xxx'
+    region: 'xx-xxxx'
 ```
 
 # Input
