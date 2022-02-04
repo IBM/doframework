@@ -1,19 +1,3 @@
-#
-# Copyright IBM Corporation 2022
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-
 import itertools
 import numpy as np
 from numpy import linalg
@@ -21,7 +5,6 @@ from scipy.spatial import ConvexHull
 from typing import Callable, Any, List
 from dataclasses import dataclass, field
 
-from doframework.core.utils import scale
 from doframework.core.utils import sample_standard_simplex
 
 def constraint(x: float, y: float, z: float, coeffs: np.array) -> np.array:
@@ -117,7 +100,7 @@ class Polyhedron:
         self.hull = ConvexHull(self.points,qhull_options='QJ') # rescale option to avoid QHull errors    
         self.simplices = self.points[self.hull.simplices,:]
         self.vertices = self.points[self.hull.vertices,:]
-        self.orientation = np.sign(hyperplanePartition(self.simplices,self.points,self.dim).sum(axis=0))
+        self.orientation = np.sign(hyperplanePartition(self.simplices,self.points,self.dim,scale_factor=self.volume()).sum(axis=0))
 
     def ison(self, X: np.array, tolerance: float=1e-12) -> np.array:
         '''
@@ -222,12 +205,17 @@ class PWL:
         # [i][j] == 1 iff i = min_j {j|p_j in V(P_i)}
         XinPoly = np.array([polylin.isin(X) for polylin in self.polylins])
         XIndex = np.zeros(XinPoly.shape)
-        XIndex[XinPoly.argmax(axis=0),np.arange(XinPoly.shape[-1])] = 1
+        XIndex[XinPoly.argmax(axis=0),np.arange(XinPoly.shape[-1])] = 1 # single 1 on first Poly with X
         vals = np.einsum('ij,ji->i', 
                          XIndex.T, 
                          np.nan_to_num(np.array([polylin.evaluate(X) for polylin in self.polylins])))
+
+        poly_vals = [self.Vs[i] for i in XIndex.argmax(axis=0)]
+        poly_val_mins = np.array([vals.min() for vals in poly_vals])
+        poly_val_maxs = np.array([vals.max() for vals in poly_vals])
+        legit_vals = (vals >= poly_val_mins)*(vals <= poly_val_maxs)        
         
-        return np.where(self.isin(X), vals, np.nan)
+        return np.where(self.isin(X)*legit_vals, vals, np.nan)
     
     def argmax(self) -> np.array:
         
