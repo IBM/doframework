@@ -282,7 +282,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     configs_path = os.environ['HOME']
-    configs_file = 'e2e_configs.yaml'
+    configs_file = 'configs.yaml'
 
     with open(os.path.join(configs_path,configs_file),'r') as file:
         try:
