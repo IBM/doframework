@@ -31,8 +31,8 @@ install_requires = [
 ]
 
 setup(name='doframework',
-version='0.1.0',
-description='Testing framework for data-driven decision-optimization algorithms.',
+version='0.1.1',
+description='A testing framework for data-driven decision-optimization algorithms.',
 long_description_content_type="text/markdown",
 long_description=open('README.md').read(),
 author='Orit Davidovich',
@@ -49,5 +49,5 @@ packages=find_packages(include=['doframework', 'doframework.core', 'doframework.
 install_requires=install_requires,
 scripts=['doframework-setup.sh'],
 package_data={'doframework': ['notebooks/*.ipynb', 'inputs/*.json', 'outputs/*.json', 'outputs/*.csv', 'examples/*.py']},
-python_requires='>=3.9'
+python_requires='>=3.8'
 )

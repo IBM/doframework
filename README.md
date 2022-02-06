@@ -16,7 +16,7 @@
 
 # DOFramework
 
-`doframework` is a testing framework for data-driven decision-optimization algorithms. It integrates easily with the user's data-driven decision-optimization application (written in Python).
+`doframework` is a testing framework for data-driven decision-optimization algorithms. It integrates with the user's data-driven decision-optimization application (written in Python).
 
 `doframework` randomly generates optimization problems (f,O,D,x*): 
 * f is continuous piece-wise linear functions defined over a domain in d-dimensional space (d>1),
