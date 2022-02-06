@@ -18,7 +18,8 @@
 
 doframework_version=0.1.0
 
-config="doframework.yaml"
+yaml="doframework.yaml"
+configs="configs.yaml"
 namespace="ray"
 cpu="1"
 mem="2G"
@@ -30,7 +31,8 @@ project_pip="doframework"
 while [ -n "$1" ]; do
     case "$1" in
         -h|--help) help="1"; break;;
-        -c|--config) shift; config="$1";;
+        -y|--yaml) shift; yaml="$1";;
+        -c|--configs) shift; configs="$1";;
         -n|--namespace) shift; namespace="$1";;
         --skip) skip="1";;
         --cpu) shift; cpu=$1;;
@@ -47,10 +49,11 @@ done
 
 if [ -n "$help" ]; then
     cat << EOF
-Configure and launch Rayvens-enabled Ray cluster on Kubernetes cluster.
+yamlure and launch Rayvens-enabled Ray cluster on Kubernetes cluster.
 
 Usage: doframework-setup.sh [options]
-    -c --config <doframework.yaml>  cluster configuration file to use/generate (defaults to "doframework.yaml" in current working directory)
+    -y --yaml <doframework.yaml>    cluster yaml to use/generate (defaults to "doframework.yaml" in current working directory)
+    -c --configs <configs.yaml>     configuration file with S3 info (defaults to "configs.yaml" in current working directory)
     -n --namespace <namespace>      kubernetes namespace to target (defaults to "ray")
     --cpu <cpus>                    cpu quota for each Ray node (defaults to 1)
     --mem <mem>                     memory quota for each Ray node (defaults to 2G)
@@ -72,7 +75,7 @@ if [ -n "$version" ]; then
 fi
 
 params=()
-params+=("--config $config")
+params+=("--config $yaml")
 params+=("--namespace $namespace")
 
 if [ -z "$skip" ]; then
@@ -82,6 +85,13 @@ if [ -z "$skip" ]; then
     if [ -n "$install_project" ]; then
         params+=("--install-project")
         params+=("--project-dir $PWD/$project_dir")
+    fi
+    if [ -n "$install_project" ]; then
+        params+=("--install-project")
+        params+=("--project-dir $PWD/$project_dir")
+    else
+        params+=("--install-project")
+        params+=("--project-dir $PWD/$configs")
     fi
     if [ -n "$project_dependencies" ]; then
         params+=("--project-dep $project_dependencies")
@@ -131,6 +141,13 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--configs", type=str, help="User configs.yaml.")
     args = parser.parse_args()
     
-    dof.run(predict_optimize_resolved, args.configs, objectives=2, datasets=2)
+    dof.run(predict_optimize_resolved, args.configs, objectives=2, datasets=2, logger=True)
 EOF
 fi
+
+grep -v "pip install /home/ray/$configs" $PWD/$yaml > $PWD/tmp.yaml && mv $PWD/tmp.yaml $PWD/$yaml
+
+while IFS='' read -r a; do
+    echo "${a/$configs/configs.yaml}"
+done < $PWD/$yaml > $PWD/tmp.yaml
+mv $PWD/tmp.yaml $PWD/$yaml
