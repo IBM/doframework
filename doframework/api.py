@@ -1,19 +1,3 @@
-#
-# Copyright IBM Corporation 2022
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-
 import os
 import yaml
 import json
@@ -238,7 +222,7 @@ def resolve(predict_optimize):
 #################################################################################################################
 #################################################################################################################
 
-Args = namedtuple('Args',['objectives','datasets','feasibility_regions','run_mode','distribute','mcmc','logger','after_idle_for','rayvens_logs'])
+Args = namedtuple('Args',['objectives','datasets','feasibility_regions','run_mode','distribute','mcmc','logger','after_idle_for','rayvens_logs','alg_num_cpus'])
 
 def run(generate_user_solution, configs_file, **kwargs):
 
@@ -251,8 +235,9 @@ def run(generate_user_solution, configs_file, **kwargs):
     logger = kwargs['logger'] if 'logger' in kwargs else True
     after_idle_for = kwargs['after_idle_for'] if 'after_idle_for' in kwargs else 100
     rayvens_logs = kwargs['rayvens_logs'] if 'rayvens_logs' in kwargs else False
+    alg_num_cpus = int(kwargs['alg_num_cpus']) if 'alg_num_cpus' in kwargs else 1
 
-    args = Args(objectives, datasets, feasibility_regions, run_mode, distribute, mcmc, logger, after_idle_for,rayvens_logs)
+    args = Args(objectives, datasets, feasibility_regions, run_mode, distribute, mcmc, logger, after_idle_for,rayvens_logs,alg_num_cpus)
 
     if args.run_mode == 'operator':
         ray.init(address='auto')
@@ -288,7 +273,7 @@ def run(generate_user_solution, configs_file, **kwargs):
         event = rayvens.OutputEvent(df.to_csv(index=False),{"CamelAwsS3Key": generated_file})
         context.publish(event)
 
-    @ray.remote(num_cpus=1)
+    @ray.remote(num_cpus=args.alg_num_cpus)
     @_process('data', configs, args, buckets, **kwargs)
     def generate_solutions(context, process_input, input_name, **kwargs):
         solution, generated_file = generate_user_solution(process_input, input_name, **kwargs)
