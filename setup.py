@@ -13,25 +13,24 @@
 # limitations under the License.
 
 from setuptools import setup, find_packages
-import pathlib
 
 install_requires = [
-    'numpy>=1.20.1',
-    'pandas>=1.1.5',
-    'ray>=1.4.1',
-    'rayvens>=0.4.0',
+    'numpy',
+    'pandas',
+    'ray[default,serve,k8s]>=1.4.1',
+    'rayvens',
     'ibm-cos-sdk>=2.10.0',
     'boto3>=1.17.110',
     'aiohttp>=3.7.4',
     'aioredis>=1.3.1',
     'scikit-learn>=0.24.1',
-    'scipy>=1.7.3',
+    'scipy',
     'PuLP>=2.4',
     'GPy>=1.10.0'
 ]
 
 setup(name='doframework',
-version='0.1.1',
+version='0.1.7',
 description='Testing framework for data-driven decision-optimization algorithms.',
 long_description_content_type="text/markdown",
 long_description=open('README.md').read(),
@@ -41,10 +40,13 @@ url="https://github.com/IBM/doframework",
 license="Apache-2.0",
 classifiers=[
     "Programming Language :: Python :: 3",
+    'Programming Language :: Python :: 3 :: Only',
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent"
     ],
 packages=find_packages(include=['doframework', 'doframework.core', 'doframework.flow']),
 install_requires=install_requires,
-package_data={'doframework': ['notebooks/*.ipynb', 'inputs/*.json']},
-python_requires='>=3.9')
+scripts=['doframework-setup.sh'],
+package_data={'doframework': ['notebooks/*.ipynb', 'inputs/*.json', 'outputs/*.json', 'outputs/*.csv', 'examples/*.py']},
+python_requires='>=3.9'
+)
