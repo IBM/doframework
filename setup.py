@@ -17,6 +17,7 @@ from setuptools import setup, find_packages
 install_requires = [
     'numpy',
     'pandas',
+    'matplotlib',
     'ray[default,serve,k8s]>=1.4.1',
     'rayvens',
     'ibm-cos-sdk>=2.10.0',
