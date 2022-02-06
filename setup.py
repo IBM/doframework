@@ -31,7 +31,7 @@ install_requires = [
 ]
 
 setup(name='doframework',
-version='0.1.7',
+version='0.1.0',
 description='Testing framework for data-driven decision-optimization algorithms.',
 long_description_content_type="text/markdown",
 long_description=open('README.md').read(),
