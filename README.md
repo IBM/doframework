@@ -16,31 +16,31 @@
 
 # DOFramework
 
-`doframework` is a testing framework for data-driven decision-optimization algorithms. It integrates easily with the user's data-driven decision-optimization algorithm written in Python.
+`doframework` is a testing framework for data-driven decision-optimization algorithms. It integrates easily with the user's data-driven decision-optimization application (written in Python).
 
-A decision-optimization algorithm looks for the optimal setup x* of some system described by a real-valued function f in some feasibility region O. Data-driven algorithms use data to establish some surrogate for f.
+A decision-optimization algorithm looks for the optimal setup x* in a region O of a system described by a real-valued function f. Data-driven algorithms don't know f and use data to establish a surrogate model.
 
-The testing framework randomly generates optimization problems instances (f,O,D,x*): 
-* f is a randomly generated piece-wise linear function over a domain in d-dimensional space (d>1).
-* O is some feasibility region in the domain of f, defined by linear constraints.
-* D = (X,y) is some dataset derived for f.
+`doframework` randomly generates optimization problem instances (f,O,D,x*): 
+* f is piece-wise linear, defined over a domain in d-dimensional space (d>1).
+* O is a region in dom(f), defined by linear constraints.
+* D = (X,y) is a dataset derived for f.
 * x* is the true optimum of f in O.
 
-The testing framework feeds the constraints and the data (O,D) into the user's algorithm, and collects its predicted optimum. The predicted optimal value can then be conpared to the true optimal value f(x*). 
+The testing framework feeds the constraints and the data (O,D) into the user's algorithm, and collects its predicted optimum. The algorithm's predicted optimal value can then be conpared to the true optimal value f(x*). 
 
-This way, `doframework` produces a performance profile for the user's algorithm.
+This way, `doframework` produces a performance profile for data-driven decision-optimization algorithms.
 
 # Design
 
-`doframework` was designed for optimal cloud distribution performance. It was implemented using an event-driven cloud desitribution approach. 
+`doframework` was designed for optimal cloud distribution. It was implemented using an event-driven approach. 
 
-`doframework` was built on top of [ray](https://www.ray.io/ "Ray -- fast and simple distributed computing") and [rayvens](https://github.com/project-codeflare/rayvens "Rayvens augments Ray with events").
+`doframework` was built on top of [ray](https://www.ray.io/ "Ray -- fast and simple distributed computing") for cloud distribution and [rayvens](https://github.com/project-codeflare/rayvens "Rayvens augments Ray with events") for event driven management.
 
 # Requirements
 
 `doframework` was written for Python version >= 3.9.0. 
 
-The testing framework can run locally or remotely. For optimal performance, run it on an OpenShift cluster.
+The testing framework can run locally or remotely. For optimal performance, run it on a cluster. Cloud onfiguration is currently available for OpenShift clusters.
 
 The framework relies on Cloud Object Storage (COS) to interact with simulation products.
 
@@ -289,7 +289,7 @@ $ oc new-project ray
 ```
 If you have already defined the "ray" project, you'll find it under `oc projects`.
 
-Upload `input.json` file(s) to your S3 bucket `<inputs_bucket>`.
+Upload `input.json` file(s) to your `<inputs_bucket>`.
 
 Run the bash script `doframework-setup.sh` to establish the `ray` cluster. Use the `--skip` flag to skip generating a new `doframework.yaml` file.
 ```
@@ -398,6 +398,12 @@ $ oc login --token=shaxxx~xxxx --server=https://xxx.xx-xx.xx.cloud.ibm.com:xxxxx
 
 # Issues
 
+## Timing
+
+Timing nay be a delicate issue when running an experiment. The event streams will shut down after `after_idle_for`, while tasks may still be waiting for execution. This may happen if workers get throttled by too many tasks, which reduces the compute resources per task.
+
+One way to tackle this is to `ray submit` the application when the `<inputs_bucket>` is empty and then upload new `input.json` files at controlled time intervals.
+
 ## Idle
 
 When an experiment goes idle, or it does not go through full cycle, this may have to do with `after_idle_for`. 
@@ -416,7 +422,7 @@ $ ray exec doframework.yaml 'tail -n 100 -f /tmp/ray/session_latest/logs/monitor
 ```
 You may see an error as follows
 ```
-mkdir: cannot create directory '/home/ray/e2e': Permission denied
+mkdir: cannot create directory '/home/ray/..': Permission denied
 ```
 The problem is that openshift generates worker nodes on random user ids which do not have [permissions](https://docs.openshift.com/container-platform/3.11/admin_guide/manage_scc.html#enable-dockerhub-images-that-require-root) for file mounts. To fix the permissions issue, run
 ```
