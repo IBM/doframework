@@ -233,7 +233,7 @@ def run(generate_user_solution, configs_file, **kwargs):
     distribute = kwargs['distribute'] if 'distribute' in kwargs else True
     mcmc = kwargs['mcmc'] if 'mcmc' in kwargs else False
     logger = kwargs['logger'] if 'logger' in kwargs else True
-    after_idle_for = kwargs['after_idle_for'] if 'after_idle_for' in kwargs else 100
+    after_idle_for = kwargs['after_idle_for'] if 'after_idle_for' in kwargs else 500
     rayvens_logs = kwargs['rayvens_logs'] if 'rayvens_logs' in kwargs else False
     alg_num_cpus = int(kwargs['alg_num_cpus']) if 'alg_num_cpus' in kwargs else 1
 
