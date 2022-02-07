@@ -76,13 +76,13 @@ To run `doframework` on an OpenShift cluster, `cd` into your project's folder an
 The setup script `doframework-setup.sh` will generate the cluster configuration file `doframework.yaml` in your project's folder.
 ```
 $ cd <user_project_folder>
-$ doframework-setup.sh
+$ doframework-setup.sh --configs configs.yaml
 ```
 
 To run `doframework` on a KiND cluster, run the setup bash script with the `--kind` option. 
 ```
 $ cd <user_project_folder>
-$ doframework-setup.sh --kind
+$ doframework-setup.sh --kind --configs configs.yaml
 ```
 
 # Inputs
