@@ -22,7 +22,7 @@ yaml="doframework.yaml"
 configs="configs.yaml"
 namespace="ray"
 cpu="1"
-mem="2G"
+mem="10G"
 project_dir=""
 project_requirements_file=""
 project_dependencies="gcc" # GPy
@@ -41,7 +41,6 @@ while [ -n "$1" ]; do
         --version) version="1";;
         --install-project) install_project="1";;
         --project-dir) shift; project_dir=$1;;
-        --project-dep) shift; project_dependencies="$project_dependencies $1";;
         --project-requirements) shift; project_requirements_file=$1;;
     esac
     shift
@@ -52,19 +51,16 @@ if [ -n "$help" ]; then
 yamlure and launch Rayvens-enabled Ray cluster on Kubernetes cluster.
 
 Usage: doframework-setup.sh [options]
-    -y --yaml <doframework.yaml>    cluster yaml to use/generate (defaults to "doframework.yaml" in current working directory)
-    -c --configs <configs.yaml>     configuration file with S3 info (defaults to "configs.yaml" in current working directory)
-    -n --namespace <namespace>      kubernetes namespace to target (defaults to "ray")
-    --cpu <cpus>                    cpu quota for each Ray node (defaults to 1)
-    --mem <mem>                     memory quota for each Ray node (defaults to 2G)
-    --skip                          reuse existing cluster configuration file (skip generation)
-    --example                       generate example file "doframework_example.py" in current working directory
-    --version                       shows the version of this script
+    -y --yaml <doframework.yaml>            cluster yaml to use/generate (defaults to "doframework.yaml" in current working directory)
+    -y --configs <absolute_configs_path>    yaml file containing COS configurations (defaults to "configs.yaml" in current working directory)
+    -n --namespace <namespace>              kubernetes namespace to target (defaults to "ray")
+    --cpu <cpus>                            cpu quota for each Ray node (defaults to 1)
+    --mem <mem>                             memory quota for each Ray node (defaults to 2G)
+    --skip                                  reuse existing cluster configuration file (skip generation)
+    --example                               generate example file "doframework_example.py" in current working directory
+    --version                               shows the version of this script
 
-    --install-project               install project on cluster nodes, use --project-dir <absolute_dir_path>, --project-requirements <absolute_file_path> or --requirements-in-project-dir
-      --project-dir <relative_dir_path>             directory of the user project to be pip installed on the cluster nodes
-      --project-requirements <relative_dir_path>    file containing python dependencies to be pip installed on the cluster nodes via requirements file
-      --project-dep <dep>                           system project dependency that will use "apt-get install -y <dep>"
+    --project-requirements <absolute_file_path>     file containing python dependencies to be pip installed on the cluster nodes via requirements file
 EOF
     exit 0
 fi
@@ -81,30 +77,72 @@ params+=("--namespace $namespace")
 if [ -z "$skip" ]; then
     params+=("--cpu $cpu")
     params+=("--mem $mem")
-    params+=("--project-pip-dep $project_pip")
-    if [ -n "$install_project" ]; then
-        params+=("--install-project")
-        params+=("--project-dir $PWD/$project_dir")
-    fi
-    if [ -n "$install_project" ]; then
-        params+=("--install-project")
-        params+=("--project-dir $PWD/$project_dir")
-    else
-        params+=("--install-project")
-        params+=("--project-dir $PWD/$configs")
-    fi
-    if [ -n "$project_dependencies" ]; then
-        params+=("--project-dep $project_dependencies")
-    fi
-    if [ -n "$project_requirements_file" ]; then
-        params+=("--project-requirements $PWD/$project_requirements_file")
-    fi
 else
     params+=("--skip")
 fi
 
 echo "--- running rayvens-setup.sh on params: ${params[@]}"
 rayvens-setup.sh ${params[@]}
+
+if [ -z "$skip" ]; then
+
+    cat >> "$yaml" << EOF
+file_mounts:
+    {
+        "/home/ray/$configs": $PWD/$configs,
+EOF
+
+    if [ ! -z "$project_requirements_file" ]; then
+
+        if [ -z "$(dirname "${project_requirements_file}")" ]; then
+            echo "ERROR: project requirements file specified: ${project_requirements_file} but it is not an absolute path"
+            exit 1
+        fi
+
+        requirements_file_name="$(basename "${project_requirements_file}")"
+
+        if [ -z "${requirements_file_name}" ]; then
+            echo "ERROR: project requirements file missing from path: ${project_requirements_file}"
+            exit 1
+        fi
+
+        cat >> "$yaml" << EOF
+        "/home/ray/$requirements_file_name": "$project_requirements_file"
+EOF
+
+    fi
+
+    cat >> "$yaml" << EOF
+    }
+file_mounts_sync_continuously: false
+head_setup_commands:
+    - sudo apt-get update
+    - sudo apt-get -y install $project_dependencies
+    - pip install $project_pip
+EOF
+
+    if [ ! -z "$requirements_file_name" ]; then
+        cat >> "$yaml" << EOF
+    - pip install -r /home/ray/$requirements_file_name
+EOF
+    fi
+
+    cat >> "$yaml" << EOF
+worker_setup_commands:
+    - sudo apt-get update
+    - sudo apt-get -y install $project_dependencies
+    - pip install $project_pip
+EOF
+
+    if [ ! -z "$requirements_file_name" ]; then
+        cat >> "$yaml" << EOF
+    - pip install -r /home/ray/$requirements_file_name
+EOF
+    fi
+
+    ray up "$yaml" --no-config-cache --yes
+
+fi
 
 if [ -n "$example" ]; then
     echo "--- generating example file doframework_example.py"
@@ -144,10 +182,3 @@ if __name__ == '__main__':
     dof.run(predict_optimize_resolved, args.configs, objectives=2, datasets=2, logger=True)
 EOF
 fi
-
-grep -v "pip install /home/ray/$configs" $PWD/$yaml > $PWD/tmp.yaml && mv $PWD/tmp.yaml $PWD/$yaml
-
-while IFS='' read -r a; do
-    echo "${a/$configs/configs.yaml}"
-done < $PWD/$yaml > $PWD/tmp.yaml
-mv $PWD/tmp.yaml $PWD/$yaml
