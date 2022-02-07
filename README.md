@@ -146,7 +146,7 @@ Find sample files under `./outputs`/
 Run the setup bash script `doframework-setup.sh` with the `--example` flag to generate the test script  `doframework_example.py` in your project folder.
 ```
 $ cd <user_project_folder>
-$ doframework-setup.sh --example
+$ doframework-setup.sh --example --configs configs.yaml
 ```
 Then run the test script locally
 ```
@@ -158,17 +158,13 @@ Make sure to upload input json files to `<inputs_bucket>`.
 
 You have the option to adapt `doframework.yaml` to fit your application. 
 
-Using the option `--project-dir` will allow you to mount your application and `pip install .` it on cluster nodes.
-```
-$ doframework-setup.sh --project-dir <relative_dir_path>
-```
 Using the option `--project-requirements` will allow you to specify application requirements and `pip install -r` then on cluster nodes.
 ```
-$ doframework-setup.sh --project-requirements <relative_dir_path>
+$ doframework-setup.sh --project-requirements <absolute_dir_path>
 ```
-Using the option `--project-dep` will allow you to specify application dependencies and `apt-get install -y` them on cluster nodes.
+By default, the setup script assumes `configs.yaml` is in `<user_project_folder>`. If you wish to use a different `configs_name`, change it with the `--configs` option
 ```
-$ doframework-setup.sh --project-dep <dep>
+$ doframework-setup.sh --configs <configs_name>
 ```
 
 # Run
