@@ -142,7 +142,7 @@ def _get_extra_input(input_name, process_type, configs, args, buckets):
 def _process(process_type, configs, args, buckets, **kwargs):
     def proc(f):
         
-        @ray.remote
+        @ray.remote(num_cpus=1)
         def f_dist(*args,**kwargs):
             return f(*args,**kwargs)
 
