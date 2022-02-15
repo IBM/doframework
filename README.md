@@ -16,15 +16,17 @@
 
 # DOFramework
 
-`doframework` is a testing framework for data-driven decision-optimization algorithms. It integrates with the user's data-driven decision-optimization application (written in Python).
+`doframework` is a testing framework for decision-optimization model learning algorithms. Such algorithms learn part or all of a decision-optimization model from data and solve the model to produce a predicted optimal solution. 
 
-`doframework` randomly generates optimization problems (f,O,D,x*): 
-* f is continuous piece-wise linear functions defined over a domain in d-dimensional space (d>1),
-* O is a region in dom(f) defined by linear constraints,
-* D = (X,y) is a dataset derived for f,
-* x* is the true optimum of f in O.
+`doframework` randomly generates multiple optimization problems (f,O,D,x*) for your algorithm to learn and solve: 
+* f is a continuous piece-wise linear function defined over a domain in d-dimensional space (d>1),
+* O is a feasibility region in dom(f) defined by linear constraints,
+* D = (X,y) is a dataset derived from f,
+* x* is the true optimum of f in O (minimum or maximum).
 
-The testing framework feeds the constraints and the data (O,D) into the user's algorithm, and collects its predicted optimum. The algorithm's predicted optimal value can then be conpared to the true optimal value f(x*). By comparing the two over many optimization problems, `doframework` produces a performance profile for data-driven decision-optimization algorithms.
+The testing framework feeds your algorithm constraints and data (O,D) and collects its predicted optimum. The algorithm's predicted optimal value can then be compared to the true optimal value f(x*). By comparing the two over multiple randomly generated optimization problems, `doframework` produces a prediction profile for your algorithm.
+
+`doframework` integrates with your algorithm (written in Python).
 
 # Design
 
@@ -34,15 +36,15 @@ The testing framework feeds the constraints and the data (O,D) into the user's a
 
 # Requirements
 
-`doframework` was written for Python version >= 3.9.0. 
+`doframework` was written for Python version >= 3.8.0. 
 
-`doframework` can run either locally or remotely. For optimal performance, run it on a Kubernetes cluster. Cloud configuration is currently available for OpenShift clusters.
+`doframework` can run either locally or remotely. For optimal performance, run it on a Kubernetes cluster. Cloud configuration is currently available for [OpenShift](https://docs.openshift.com/ "RedHat OpenShift Documentation") clusters.
 
-The framework relies on [Cloud Object Storage](https://www.ibm.com/cloud/object-storage) (COS) to interact with simulation products.
+The framework relies on Cloud Object Storage (COS) to interact with simulation products. Configuration is currently available for [IBM COS](https://www.ibm.com/cloud/object-storage "IBM Cloud Object Storage").
 
 # Configs
 
-The user provides COS specifications in the form of a `configs.yaml`. 
+COS specifications are provided in the form of a `configs.yaml`. 
 
 The `configs.yaml` includes the list of source and target bucket names (under `s3:buckets`). Credentials are added under designated fields.
 
@@ -63,6 +65,8 @@ s3:
 ```
 The buckets must be **distinct**.
 
+Make sure `configs.yaml` is under your `<user_project_folder>`.
+
 # Install
 
 To run `doframework` locally, install with
@@ -73,7 +77,7 @@ $ pip install doframework
 
 To run `doframework` on an OpenShift cluster, `cd` into your project's folder and run the setup bash script `doframework-setup.sh`. Make sure to log into your cluster first (see OpenShift Login below). 
 
-The setup script `doframework-setup.sh` will generate the cluster configuration file `doframework.yaml` in your project's folder.
+The setup script `doframework-setup.sh` will generate the cluster configuration file `doframework.yaml` in your project's folder. The setup script accepts the name of your `configs.yaml` under `<user_project_folder>`
 ```
 $ cd <user_project_folder>
 $ doframework-setup.sh --configs configs.yaml
@@ -87,7 +91,11 @@ $ doframework-setup.sh --kind --configs configs.yaml
 
 # Inputs
 
-The application will run end to end and produce results once `input.json` files are uploaded to `<inputs_bucket>`. The `input.json` files provide meta data for the random genration of optimization problems.
+`input.json` files provide meta data for the random genration of optimization problems.
+
+`doframework` will run end to end once `input.json` files are uploaded to `<inputs_bucket>`. 
+
+The jupyter notebook `./notebooks/inputs.ipynb` allows you to automatically generate input files and upload them to `<inputs_bucket>`.
 
 Here is an example of an input file (see input samples `input_basic.json` and `input_all.json` under `./inputs`).
 
@@ -121,19 +129,17 @@ Here is an example of an input file (see input samples `input_basic.json` and `i
 `f:vertices:range`: f domain will be inside this box range.<br>
 `f:values:range`: range of f values.<br>
 `omega:ratio`: vol(O) / vol(dom(f)) >= ratio.<br>
-`omega:scale`: max jitter in sampling feasibility regions (as a ratio of f domain diameter).<br>
+`omega:scale`: scale of jitter in sampling feasibility regions (as a ratio of f domain diameter).<br>
 `data:N`: number of data points to sample.<br>
-`data:noise`: response variable $y$ noise.<br>
-`data:policy_num`: number of Gaussians in Gaussian mix distribution of data.<br>
-`data:scale`: max STD of Gaussians in Gaussian mix distribution of data (as a ratio of f domain diameter).
-
-The jupyter notebook `./notebooks/inputs.ipynb` allows you to automatically generate input files and upload them to `<inputs_bucket>`.
+`data:noise`: response variable noise.<br>
+`data:policy_num`: number of centers in Gaussian mix distribution of data.<br>
+`data:scale`: max STD of Gaussian mix distribution of data (as a ratio of f domain diameter).
 
 It's a good idea to start experimenting on low dimensional problems. 
 
 # Outputs
 
-`doframework` produces three types of files as experiment byproducts:
+`doframework` produces three types of simulation files:
 
 * `objective.json`: containing information on (f,O,x*) 
 * `data.csv`: containing the dataset the algorithm accepts as input
@@ -146,34 +152,28 @@ Find sample files under `./outputs`/
 Run the setup bash script `doframework-setup.sh` with the `--example` flag to generate the test script  `doframework_example.py` in your project folder.
 ```
 $ cd <user_project_folder>
-$ doframework-setup.sh --example --configs configs.yaml
+$ doframework-setup.sh  --configs configs.yaml --example
 ```
 Then run the test script locally
 ```
 $ python doframework_example.py --configs configs.yaml
 ```
-Make sure to upload input json files to `<inputs_bucket>`.
+Make sure to upload input json files to `<inputs_bucket>` once you run `doframework_example.py`.
 
 # Adaptations
 
 You have the option to adapt `doframework.yaml` to fit your application. 
 
-Using the option `--project-requirements` will allow you to specify application requirements and `pip install -r` then on cluster nodes.
+Use the flag `--project-requirements` to specify the absolute path to your `requirements.txt` file. It will installed with `pip install -r requirements.txt` on your cluster nodes.
 ```
-$ doframework-setup.sh --project-requirements <absolute_dir_path>
-```
-By default, the setup script assumes `configs.yaml` is in `<user_project_folder>`. If you wish to use a different `configs_name`, change it with the `--configs` option
-```
-$ doframework-setup.sh --configs <configs_name>
+$ doframework-setup.sh --project-requirements <absolute_requirements_path>
 ```
 
 # Run
 
-The testing framework is invoked within the user's application. 
+`doframework` integrates with your application. Your algorithm will be integrated once it is decorated with `doframework.resolve`. 
 
-The user's model will be integrated into the testing framework, when it is decorated with `doframework.resolve`. 
-
-`doframework` supports the following inputs to the model: 
+The testing framework supports the following inputs to your algorithm: 
 
 `data`: 2D np.array with features X = data[ : , :-1] and response variable y = data[ : ,-1].<br>
 `constraints`: linear constraints as a 2D numpy array A. A data point x satisfies the constraints when A[ : , :-1]*x + A[ : ,-1] <= 0.<br>
@@ -197,13 +197,13 @@ Here is an example user application.
 import doframework as dof
 
 @dof.resolve
-def model(data: np.array, constraints: np.array, **kwargs):
+def alg(data: np.array, constraints: np.array, **kwargs):
     ...    
     return optimal_arg, optimal_val, regression_model
 
 if __name__ == '__main__':
     
-    dof.run(model, 'configs.yaml', objectives=5, datasets=3)
+    dof.run(alg, 'configs.yaml', objectives=5, datasets=3, **kwargs)
 ```
 
 # KiND
