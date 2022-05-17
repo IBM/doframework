@@ -390,17 +390,23 @@ $ oc login --token=shaxxx~xxxx --server=https://xxx.xx-xx.xx.cloud.ibm.com:xxxxx
 
 # Issues
 
+---------------
+
 ## Timing
 
 Timing can be a delicate issue when running a `doframework` experiment. Ray workers may get throttled by too many tasks, which reduces the compute resources per task, effectively choking that worker.
 
 One way to tackle this is to `ray submit` the application when the `<inputs_bucket>` is empty and then upload new `input.json` files at controlled time intervals. Finding the optimal rate may involve some trial and error.
 
+---------------
+
 ## Idle
 
 When an experiment goes idle, or it does not go through full cycle, this may have to do with `after_idle_for`. 
 
 The `after_idle_for` time window should be sufficiently large for simulation products to make it through to the next stage. This is especially true when optimization problem dimensions are higher, or when your algorithm takes longer.
+
+---------------
 
 ## Autoscaling on OpenShift
  
@@ -445,7 +451,7 @@ Running the bash script `doframework-setup.sh`, or the `ray up` command, you may
 Error from server (BadRequest): pod rayvens-cluster-head-mcsfh does not have a host assigned
     SSH still not available (Exit Status 1): kubectl -n ray exec -it rayvens-cluster-head-mcsfh -- bash --login -c -i 'true && source ~/.bashrc && export OMP_NUM_THREADS=1 PYTHONWARNINGS=ignore && (uptime)', retrying in 5 seconds.
 ```
-Just wait. Eventually it'll go through. 
+Just wait. Eventually it'll go through. If it ultimately fails, this may be a resources issue -- your cluster may be too small for the resources requested. Set the values of the variables `--mem` and / or `--cpu` to reflect your cluster resources when you run `doframework-setup.sh`.
 
 ---------------
 
