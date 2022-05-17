@@ -65,7 +65,7 @@ s3:
 ```
 The buckets must be **distinct**.
 
-Make sure `configs.yaml` is under your `<user_project_folder>`.
+Make sure `configs.yaml` is under your `<user_project_folder>` (not a symbolic link).
 
 # Install
 
