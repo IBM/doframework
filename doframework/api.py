@@ -9,6 +9,7 @@ import pandas as pd
 import ray
 import rayvens
 import ibm_boto3
+import boto3
 
 from doframework.flow.objectives import generate_objective, calculate_objectives
 from doframework.flow.datasets import generate_dataset
@@ -19,39 +20,70 @@ from doframework.flow.metrics import generate_metric, files_from_solution
 #################################################################################################################
 
 def _get_s3_object(configs):
-    return ibm_boto3.resource(service_name='s3',
-                              region_name=configs['s3']['region'],
-                              endpoint_url=configs['s3']['endpoint_url'],
-                              aws_access_key_id=configs['s3']['aws_access_key_id'],
-                              aws_secret_access_key=configs['s3']['aws_secret_access_key'])
+
+    s3 = configs['s3']
+
+    assert 'cloud_service_provider' in s3, 'Missing s3:cloud_service_provider in configs.'
+    assert s3['cloud_service_provider'] in ['ibm','aws'], 'cloud_service_provider in configs must be either `aws` or `ibm`.'
+
+    if s3['cloud_service_provider'] == 'ibm':
+
+        return ibm_boto3.resource(service_name='s3',
+                                region_name=s3['region'],
+                                endpoint_url=s3['endpoint_url'],
+                                aws_access_key_id=s3['aws_access_key_id'],
+                                aws_secret_access_key=s3['aws_secret_access_key'])
+
+    if s3['cloud_service_provider'] == 'aws':
+
+        return boto3.resource(service_name='s3',
+                                region_name=s3['region'],
+                                aws_access_key_id=s3['aws_access_key_id'],
+                                aws_secret_access_key=s3['aws_secret_access_key'])
 
 def _get_buckets(configs):
+
     s3_buckets = _get_s3_object(configs).buckets.all()
     s3_buckets = [bucket.name for bucket in s3_buckets]
+    
     return {name: bucket for name, bucket in configs['s3']['buckets'].items() if bucket in s3_buckets}
 
 def _get_source_config(from_bucket, to_bucket, configs):
 
-    return dict(kind='cloud-object-storage-source',
-            name='source',
-            bucket_name=from_bucket,
-            access_key_id=configs['s3']['aws_access_key_id'],
-            secret_access_key=configs['s3']['aws_secret_access_key'],
-            endpoint=configs['s3']['endpoint_url'],
-            region=configs['s3']['region'],
-            move_after_read=to_bucket
-        )
+    s3 = configs['s3']
+
+    d = dict(kind='cloud-object-storage-source',
+        name='source',
+        bucket_name=from_bucket,
+        access_key_id=s3['aws_access_key_id'],
+        secret_access_key=s3['aws_secret_access_key'],
+        region=s3['region'],
+        move_after_read=to_bucket
+    )
+
+    if 'endpoint_url' in s3:
+
+        d = {**d,**dict(endpoint=s3['endpoint_url'])}
+
+    return d
 
 def _get_sink_config(to_bucket, configs):
 
-    return dict(kind='cloud-object-storage-sink',
-            name='sink',
-            bucket_name=to_bucket,
-            access_key_id=configs['s3']['aws_access_key_id'],
-            secret_access_key=configs['s3']['aws_secret_access_key'],
-            endpoint=configs['s3']['endpoint_url'],
-            region=configs['s3']['region']
-        )
+    s3 = configs['s3']
+
+    d = dict(kind='cloud-object-storage-sink',
+        name='sink',
+        bucket_name=to_bucket,
+        access_key_id=s3['aws_access_key_id'],
+        secret_access_key=s3['aws_secret_access_key'],
+        region=s3['region']
+    )
+
+    if 'endpoint_url' in s3:
+
+        d = {**d,**dict(endpoint=s3['endpoint_url'])}
+
+    return d
 
 def _target_bucket_name(buckets, process_type,args):
     try:
@@ -138,6 +170,9 @@ def _get_extra_input(input_name, process_type, configs, args, buckets):
             print('({}) ERROR ... Error occured while getting extra input.'.format(process_type))
             print(e)
     return {}
+
+#################################################################################################################
+#################################################################################################################
 
 def _process(process_type, configs, args, buckets, **kwargs):
     def proc(f):
@@ -237,13 +272,13 @@ def run(generate_user_solution, configs_file, **kwargs):
     rayvens_logs = kwargs['rayvens_logs'] if 'rayvens_logs' in kwargs else False
     alg_num_cpus = int(kwargs['alg_num_cpus']) if 'alg_num_cpus' in kwargs else 1
 
-    args = Args(objectives, datasets, feasibility_regions, run_mode, distribute, mcmc, logger, after_idle_for,rayvens_logs,alg_num_cpus)
+    args = Args(objectives, datasets, feasibility_regions, run_mode, distribute, mcmc, logger, after_idle_for, rayvens_logs, alg_num_cpus)
 
     if args.run_mode == 'operator':
         ray.init(address='auto')
     else:
         ray.init()
-    rayvens.init(mode=args.run_mode,release=(not args.rayvens_logs)) # remove some rayvens logs
+    rayvens.init(mode=args.run_mode) # remove rayvens logs ,release=(not args.rayvens_logs)
 
     if args.logger: print('({}) INFO ... Running simulation with args objectives={o} datasets={s} feasibility_regions={r} distribute={d} run_mode={m} logger={l}'.format('root', 
         o=args.objectives, s=args.datasets, r=args.feasibility_regions, d=args.distribute, m=args.run_mode, l=args.logger))
