@@ -24,7 +24,7 @@
 * D = (X,y) is a dataset derived from f,
 * x* is the true optimum of f in O (minimum or maximum).
 
-The testing framework feeds your algorithm constraints and data (O,D) and collects its predicted optimum. The algorithm's predicted optimal value can then be compared to the true optimal value f(x*). By comparing the two over multiple randomly generated optimization problems, `doframework` produces a prediction profile for your algorithm.
+The testing framework feeds your algorithm constraints and data (O,D) and collects its predicted optimum. The algorithm's predicted optimal value can then be compared to the true optimal value f(x*). By comparing the two over multiple randomly generated optimization problems, `doframework` produces a **prediction profile** for your algorithm.
 
 `doframework` integrates with your algorithm (written in Python).
 
@@ -165,6 +165,18 @@ The `run()` utility accepts the arguments:
 `logger`: True to see logs, False otherwise.<br>
 `after_idle_for`: stop running when event stream is idle after this many seconds.<br>
 
+# Algorithm Prediction Profile
+
+Once you are done running a `doframework` experiment, run the notebook `notebooks/profile.ipynb`. It will fetch the relevant experiment products from the target COS buckets and produce the algorithm's prediction profile and prediction probabilities.
+
+`doframework` produces three types of experiment products files:
+
+* `objective.json`: containing information on (f,O,x*) 
+* `data.csv`: containing the dataset the algorithm accepts as input
+* `solution.json`: containing the algorithm's predicted optimum
+
+See sample files under `./outputs`/
+
 # Kubernetes Cluster
 
 To run `doframework` on a K8S cluster, make sure you are on the cluster's local `kubectl` context. Log into your cluster, if necessary (applicable to OpenShift, see doc).
@@ -244,16 +256,6 @@ Shutdown the `ray` cluster with
 ```
 $ ray down -y doframework.yaml
 ```
-
-# Outputs
-
-`doframework` produces three types of simulation files:
-
-* `objective.json`: containing information on (f,O,x*) 
-* `data.csv`: containing the dataset the algorithm accepts as input
-* `solution.json`: containing the algorithm's predicted optimum
-
-See sample files under `./outputs`/
 
 # Test
 
