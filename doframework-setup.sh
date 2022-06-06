@@ -54,12 +54,12 @@ if [ -n "$help" ]; then
 yamlure and launch Rayvens-enabled Ray cluster on Kubernetes cluster.
 
 Usage: doframework-setup.sh [options]
-    -y --yaml <doframework.yaml>            cluster yaml to use/generate (defaults to "doframework.yaml" in current working directory)
-    -y --configs <absolute_configs_path>    configs file containing COS configurations (defaults to "configs.yaml" in current working directory)
+    -y --yaml <doframework.yaml>            cluster yaml to generate in working directory (defaults to "doframework.yaml")
+    -y --configs <absolute_configs_path>    configs yaml containing COS configurations (defaults to "configs.yaml" in working directory)
     -n --namespace <namespace>              kubernetes namespace to target (defaults to "ray")
     --cpu <cpus>                            cpu quota for each Ray node (defaults to 1)
     --mem <mem>                             memory quota for each Ray node (defaults to 2G)
-    --max-workers <max_workers>     the maximum number of workers the Ray cluster will have at any given time (defaults to 2)
+    --max-workers <max_workers>             the maximum number of workers the Ray cluster will have at any given time (defaults to 2)
     --skip                                  reuse existing cluster configuration file (skip generation)
     --example                               generate example file "doframework_example.py" in current working directory
     --version                               shows the version of this script
