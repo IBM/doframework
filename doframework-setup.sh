@@ -16,17 +16,19 @@
 # limitations under the License.
 #
 
-doframework_version=0.1.0
+doframework_version=0.2.0
 
 yaml="doframework.yaml"
-configs="configs.yaml"
+configs=""
 namespace="ray"
+kind=""
 cpu="1"
 mem="8G"
+max_workers="2"
 project_dir=""
 project_requirements_file=""
-project_dependencies="gcc" # GPy
-project_pip="doframework"
+project_pip_dep="doframework"
+project_dep="gcc" # GPy
 
 while [ -n "$1" ]; do
     case "$1" in
@@ -34,14 +36,15 @@ while [ -n "$1" ]; do
         -y|--yaml) shift; yaml="$1";;
         -c|--configs) shift; configs="$1";;
         -n|--namespace) shift; namespace="$1";;
+        --kind) kind="1";;
         --skip) skip="1";;
         --cpu) shift; cpu=$1;;
         --mem) shift; mem=$1;;
+        --max-workers) shift; max_workers=$1;;
         --example) example="1";;
         --version) version="1";;
-        --install-project) install_project="1";;
-        --project-dir) shift; project_dir=$1;;
-        --project-requirements) shift; project_requirements_file=$1;;
+        --project-dir) shift; project_dir="$1";;
+        --project-requirements) shift; project_requirements_file="$1";;
     esac
     shift
 done
@@ -51,16 +54,21 @@ if [ -n "$help" ]; then
 yamlure and launch Rayvens-enabled Ray cluster on Kubernetes cluster.
 
 Usage: doframework-setup.sh [options]
-    -y --yaml <doframework.yaml>            cluster yaml to use/generate (defaults to "doframework.yaml" in current working directory)
-    -y --configs <absolute_configs_path>    yaml file containing COS configurations (defaults to "configs.yaml" in current working directory)
+    -y --yaml <doframework.yaml>            cluster yaml to generate in working directory (defaults to "doframework.yaml")
+    -y --configs <absolute_configs_path>    configs yaml containing COS configurations (defaults to "configs.yaml" in working directory)
     -n --namespace <namespace>              kubernetes namespace to target (defaults to "ray")
     --cpu <cpus>                            cpu quota for each Ray node (defaults to 1)
     --mem <mem>                             memory quota for each Ray node (defaults to 2G)
+    --max-workers <max_workers>             the maximum number of workers the Ray cluster will have at any given time (defaults to 2)
     --skip                                  reuse existing cluster configuration file (skip generation)
     --example                               generate example file "doframework_example.py" in current working directory
     --version                               shows the version of this script
 
-    --project-requirements <absolute_file_path>     file containing python dependencies to be pip installed on the cluster nodes via requirements file
+    --project-dir <absolute_dir_path>             directory of the user project to be pip installed on the cluster nodes
+    --project-requirements <absolute_file_path>   requirements file containing python dependencies to be pip installed on the cluster nodes
+
+    --kind                                  setup a development Kind cluster on localhost instead of deploying to current Kubernetes context
+                                            (destroy existing Kind cluster if any, set Kubernetes context to Kind)
 EOF
     exit 0
 fi
@@ -74,75 +82,38 @@ params=()
 params+=("--config $yaml")
 params+=("--namespace $namespace")
 
+if [ -n "$configs" ]; then
+    project_mount=$configs
+else
+    project_mount="$PWD/configs.yaml"
+fi
+
 if [ -z "$skip" ]; then
+
+    params+=("--kind $kind")
     params+=("--cpu $cpu")
     params+=("--mem $mem")
+    params+=("--max-workers $max_workers")
+    params+=("--project-mount $project_mount")
+    params+=("--project-pip-dep $project_pip_dep")
+    params+=("--project-dep $project_dep")
+
+    if [ -n "$project_dir" ]; then
+        params+=("--project-dir $project_dir")
+    fi
+
+    if [ -n "$project_requirements_file" ]; then
+        params+=("--project-requirements $project_requirements_file")
+    fi
+
 else
+
     params+=("--skip")
+
 fi
 
 echo "--- running rayvens-setup.sh on params: ${params[@]}"
 rayvens-setup.sh ${params[@]}
-
-if [ -z "$skip" ]; then
-
-    cat >> "$yaml" << EOF
-file_mounts:
-    {
-        "/home/ray/$configs": $PWD/$configs,
-EOF
-
-    if [ ! -z "$project_requirements_file" ]; then
-
-        if [ -z "$(dirname "${project_requirements_file}")" ]; then
-            echo "ERROR: project requirements file specified: ${project_requirements_file} but it is not an absolute path"
-            exit 1
-        fi
-
-        requirements_file_name="$(basename "${project_requirements_file}")"
-
-        if [ -z "${requirements_file_name}" ]; then
-            echo "ERROR: project requirements file missing from path: ${project_requirements_file}"
-            exit 1
-        fi
-
-        cat >> "$yaml" << EOF
-        "/home/ray/$requirements_file_name": "$project_requirements_file"
-EOF
-
-    fi
-
-    cat >> "$yaml" << EOF
-    }
-file_mounts_sync_continuously: false
-head_setup_commands:
-    - sudo apt-get update
-    - sudo apt-get -y install $project_dependencies
-    - pip install $project_pip
-EOF
-
-    if [ ! -z "$requirements_file_name" ]; then
-        cat >> "$yaml" << EOF
-    - pip install -r /home/ray/$requirements_file_name
-EOF
-    fi
-
-    cat >> "$yaml" << EOF
-worker_setup_commands:
-    - sudo apt-get update
-    - sudo apt-get -y install $project_dependencies
-    - pip install $project_pip
-EOF
-
-    if [ ! -z "$requirements_file_name" ]; then
-        cat >> "$yaml" << EOF
-    - pip install -r /home/ray/$requirements_file_name
-EOF
-    fi
-
-    ray up "$yaml" --no-config-cache --yes
-
-fi
 
 if [ -n "$example" ]; then
     echo "--- generating example file doframework_example.py"

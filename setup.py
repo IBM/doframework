@@ -19,7 +19,7 @@ install_requires = [
     'pandas',
     'matplotlib',
     'ray[default,serve,k8s]>=1.4.1',
-    'rayvens',
+    'rayvens>=0.5.0',
     'ibm-cos-sdk>=2.10.0',
     'boto3>=1.17.110',
     'aiohttp>=3.7.4',
@@ -27,7 +27,7 @@ install_requires = [
     'scikit-learn>=0.24.1',
     'scipy',
     'PuLP>=2.4',
-    'GPy>=1.10.0'
+    'GPy>=1.9.9'
 ]
 
 setup(name='doframework',

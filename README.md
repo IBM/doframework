@@ -24,7 +24,7 @@
 * D = (X,y) is a dataset derived from f,
 * x* is the true optimum of f in O (minimum or maximum).
 
-The testing framework feeds your algorithm constraints and data (O,D) and collects its predicted optimum. The algorithm's predicted optimal value can then be compared to the true optimal value f(x*). By comparing the two over multiple randomly generated optimization problems, `doframework` produces a prediction profile for your algorithm.
+The testing framework feeds your algorithm constraints and data (O,D) and collects its predicted optimum. The algorithm's predicted optimal value can then be compared to the true optimal value f(x*). By comparing the two over multiple randomly generated optimization problems, `doframework` produces a **prediction profile** for your algorithm.
 
 `doframework` integrates with your algorithm (written in Python).
 
@@ -38,15 +38,27 @@ The testing framework feeds your algorithm constraints and data (O,D) and collec
 
 `doframework` was written for Python version >= 3.8.0. 
 
-`doframework` can run either locally or remotely. For optimal performance, run it on a Kubernetes cluster. Cloud configuration is currently available for [OpenShift](https://docs.openshift.com/ "RedHat OpenShift Documentation") clusters.
+`doframework` can run either locally or remotely. For optimal performance, run it on a Kubernetes cluster. Cloud configuration is currently available for AWS and IBM Cloud [OpenShift](https://docs.openshift.com/ "RedHat OpenShift Documentation") clusters.
 
-The framework relies on Cloud Object Storage (COS) to interact with simulation products. Configuration is currently available for [IBM COS](https://www.ibm.com/cloud/object-storage "IBM Cloud Object Storage").
+The framework relies on Cloud Object Storage (COS) to interact with simulation products. Configuration is currently available for [AWS](https://aws.amazon.com/s3/ "AWS S3") or [IBM COS](https://www.ibm.com/cloud/object-storage "IBM Cloud Object Storage").
+
+# Install
+
+To run `doframework` locally, install with
+
+```
+$ pip install doframework
+```
 
 # Configs
 
-COS specifications are provided in the form of a `configs.yaml`. 
+COS specifications are provided in a `configs.yaml`. 
 
 The `configs.yaml` includes the list of source and target bucket names (under `s3:buckets`). Credentials are added under designated fields.
+
+Currently, two cloud service providers are available under `s3:cloud_service_provider`: `aws` and `ibm`.
+
+`s3:endpoint_url` is optional for AWS.
 
 ```
 s3:
@@ -62,38 +74,16 @@ s3:
     aws_access_key_id: 'xxxx'
     endpoint_url: 'https://xxx.xxx.xxx'
     region: 'xx-xxxx'
-```
-The buckets must be **distinct**.
-
-Make sure `configs.yaml` is under your `<user_project_folder>` (not a symbolic link).
-
-# Install
-
-To run `doframework` locally, install with
+    cloud_service_provider: 'aws'
 
 ```
-$ pip install doframework
-```
-
-To run `doframework` on an OpenShift cluster, `cd` into your project's folder and run the setup bash script `doframework-setup.sh`. Make sure to log into your cluster first (see OpenShift Login below). 
-
-The setup script `doframework-setup.sh` will generate the cluster configuration file `doframework.yaml` in your project's folder. The setup script accepts the name of your `configs.yaml` under `<user_project_folder>`
-```
-$ cd <user_project_folder>
-$ doframework-setup.sh --configs configs.yaml
-```
-
-To run `doframework` on a KiND cluster, run the setup bash script with the `--kind` option. 
-```
-$ cd <user_project_folder>
-$ doframework-setup.sh --kind --configs configs.yaml
-```
+**Bucket names above must be distinct**.
 
 # Inputs
 
-`input.json` files provide meta data for the random genration of optimization problems.
+`input.json` files provide the necessary metadata for the random genration of optimization problems.
 
-`doframework` will run end to end once `input.json` files are uploaded to `<inputs_bucket>`. 
+`doframework` will run end to end, once `input.json` files are uploaded to `<inputs_bucket>`. 
 
 The jupyter notebook `./notebooks/inputs.ipynb` allows you to automatically generate input files and upload them to `<inputs_bucket>`.
 
@@ -129,69 +119,21 @@ Here is an example of an input file (see input samples `input_basic.json` and `i
 `f:vertices:range`: f domain will be inside this box range.<br>
 `f:values:range`: range of f values.<br>
 `omega:ratio`: vol(O) / vol(dom(f)) >= ratio.<br>
-`omega:scale`: scale of jitter in sampling feasibility regions (as a ratio of f domain diameter).<br>
+`omega:scale`: scale of jitter when sampling feasibility regions (as a ratio of domain diameter).<br>
 `data:N`: number of data points to sample.<br>
 `data:noise`: response variable noise.<br>
 `data:policy_num`: number of centers in Gaussian mix distribution of data.<br>
-`data:scale`: max STD of Gaussian mix distribution of data (as a ratio of f domain diameter).
+`data:scale`: max STD of Gaussian mix distribution of data (as a ratio of domain diameter).
 
-It's a good idea to start experimenting on low dimensional problems. 
+It's a good idea to start experimenting on low-dimensional problems. 
 
-# Outputs
+# User App Integration
 
-`doframework` produces three types of simulation files:
+Your algorithm will be integrated together with `doframework` once it is decorated with `doframework.resolve`. 
 
-* `objective.json`: containing information on (f,O,x*) 
-* `data.csv`: containing the dataset the algorithm accepts as input
-* `solution.json`: containing the algorithm's predicted optimum
+A `doframework` experiment runs with `doframework.run()`. The `run()` utility accepts the decorated model and a path to the `configs.yaml`.
 
-Find sample files under `./outputs`/
-
-# Test
-
-Run the setup bash script `doframework-setup.sh` with the `--example` flag to generate the test script  `doframework_example.py` in your project folder.
-```
-$ cd <user_project_folder>
-$ doframework-setup.sh  --configs configs.yaml --example
-```
-Then run the test script locally
-```
-$ python doframework_example.py --configs configs.yaml
-```
-Make sure to upload input json files to `<inputs_bucket>` once you run `doframework_example.py`.
-
-# Adaptations
-
-You have the option to adapt `doframework.yaml` to fit your application. 
-
-Use the flag `--project-requirements` to specify the absolute path to your `requirements.txt` file. It will installed with `pip install -r requirements.txt` on your cluster nodes.
-```
-$ doframework-setup.sh --project-requirements <absolute_requirements_path>
-```
-
-# Run
-
-`doframework` integrates with your application. Your algorithm will be integrated once it is decorated with `doframework.resolve`. 
-
-The testing framework supports the following inputs to your algorithm: 
-
-`data`: 2D np.array with features X = data[ : , :-1] and response variable y = data[ : ,-1].<br>
-`constraints`: linear constraints as a 2D numpy array A. A data point x satisfies the constraints when A[ : , :-1]*x + A[ : ,-1] <= 0.<br>
-`lower_bound`: lower bound per feature variable.<br>
-`upper_bound`: upper bound per feature variable.<br>
-`init_value`: optional initial value.<br>
-
-A `doframework` experiment runs with `doframework.run()`. The `run()` utility accepts the decorated model and a relative path to the `configs.yaml`. It also accepts the keyword arguments:
-
-`objectives`: number of objective targets to generate per input file.<br>
-`datasets`: number of datasets to generate per objective target.<br>
-`feasibility_regions`: number of feasibility regions to generate per objective and dataset.<br>
-`distribute`: True to run distributively, False to run sequentially.<br>
-`logger`: True to see logs, False otherwise.<br>
-`after_idle_for`: stop running when event stream is idle after this many seconds.<br>
-`alg_num_cpus`: number of CPUs provisioned for user model per worker.<br>
-
-Here is an example user application. 
+Here is an example user application `module.py`.
 
 ```
 import doframework as dof
@@ -206,287 +148,133 @@ if __name__ == '__main__':
     dof.run(alg, 'configs.yaml', objectives=5, datasets=3, **kwargs)
 ```
 
-# KiND
+The testing framework supports the following inputs to your algorithm: 
 
-A [KiND](https://kind.sigs.k8s.io/docs/user/quick-start "KiND quick start") cluster simulates a Kubernetes cluster without the need to dockerize. It still requires [Docker](https://docs.docker.com/get-docker/ "Get Docker") installed and configured.
+`data`: 2D np.array with features X = data[ : , :-1] and response variable y = data[ : ,-1].<br>
+`constraints`: linear constraints as a 2D numpy array A. A data point x satisfies the constraints when A[ : , :-1]*x + A[ : ,-1] <= 0.<br>
+`lower_bound`: lower bound per feature variable.<br>
+`upper_bound`: upper bound per feature variable.<br>
+`init_value`: optional initial value.<br>
 
-Here's how to set up KiND on a Mac. First install `Go`.
+The `run()` utility accepts the arguments:
+
+`objectives`: number of objective targets to generate per input file.<br>
+`datasets`: number of datasets to generate per objective target.<br>
+`feasibility_regions`: number of feasibility regions to generate per objective and dataset.<br>
+`distribute`: True to run distributively, False to run sequentially.<br>
+`logger`: True to see logs, False otherwise.<br>
+`after_idle_for`: stop running when event stream is idle after this many seconds.<br>
+
+# Algorithm Prediction Profile
+
+Once you are done running a `doframework` experiment, run the notebook `notebooks/profile.ipynb`. It will fetch the relevant experiment products from the target COS buckets and produce the algorithm's prediction profile and prediction probabilities.
+
+`doframework` produces three types of experiment products files:
+
+* `objective.json`: containing information on (f,O,x*) 
+* `data.csv`: containing the dataset the algorithm accepts as input
+* `solution.json`: containing the algorithm's predicted optimum
+
+See sample files under `./outputs`/
+
+# Kubernetes Cluster
+
+To run `doframework` on a K8S cluster, make sure you are on the cluster's local `kubectl` context. Log into your cluster, if necessary (applicable to OpenShift, see doc).
+
+You can check your local `kubectl` context and change it if necessary with
 ```
-$ export GOPATH="${HOME}/.go"
-$ export GOROOT="$(brew --prefix golang)/libexec"
-$ export PATH="$PATH:${GOPATH}/bin:${GOROOT}/bin"
-$ test -d "${GOPATH}" || mkdir "${GOPATH}"
-$ test -d "${GOPATH}/src/github.com" || mkdir -p "${GOPATH}/src/github.com"
-$ brew install go
+$ kubectl config current-context
+$ kubectl config get-contexts
+$ kubectl config use-context cluster_name
+>> Switched to context "cluster_name".
 ```
 
-Now install [KiND]
-```
-$ brew install kind
-```
+Now `cd` into your project's folder and run the setup bash script `doframework-setup.sh`. The setup script will generate the cluster configuration file `doframework.yaml` in your project's folder. The setup script requires the absolute path to your `configs.yaml`. Otherwise, it assumes a file `configs.yaml` is located under your project's folder. Running the setup script will establish the `ray` cluster. 
 
-Set up the cluster by running the bash script `doframework-setup.sh`. The ` --skip` flag will tell the script not to generate `doframework.yaml` again. 
 ```
 $ cd <user_project_folder>
-$ doframework-setup.sh --kind  --skip
+$ doframework-setup.sh --configs ~/path/to/configs.yaml
 ```
 
-Run your application `module.py` on the [KiND] cluster with.
-```
-$ ray submit doframework.yaml module.py
-```
-At this point you may encounter
-```
-RuntimeError: Head node of cluster (rayvens-cluster) not found!
-```
-This is typically a resource allocation issue. To investigate this issue, make sure you have the [kubectl](https://kubernetes.io/docs/tasks/tools/ "Install kubectl") CLI installed. Look for the `rayvens-cluster-head` node
-```
-$ kubectl get pods -n ray
-$ kubectl describe pod rayvens-cluster-head-xxsfh -n ray
-```
-The `decsribe` command will spit out something like
-```
-Events:
-  Type     Reason            Age                 From               Message
-  ----     ------            ----                ----               -------
-  Warning  FailedScheduling  24s (x13 over 11m)  default-scheduler  0/1 nodes are available: 1 Insufficient memory.
-```
-One quick way to resolve the issue is to go to the Docker Desktop and look under Resources -> Advanced. Play with the number of CPUs / Memory GBs, but don't go crazy, otherwise your machine will start running really ... really ... s-l-o-w.
+You have the option to adapt `doframework.yaml` to fit your application. 
 
-Any resource allocation changes to `doframework.yaml` can be updated with
+Use the flag `--project-requirements` to specify the absolute path to your `requirements.txt` file. It will be `pip install -r requirements.txt` on your cluster nodes. 
+
+Use the flag `--project-dir` to specify the absolute path to your project. It will be pip installed on your cluster nodes. 
 ```
-$ ray up doframework.yaml --no-config-cache --yes
+$ doframework-setup.sh --configs ~/path/to/configs.yaml --project-requirements <absolute_requirements_path> --project-dir <absolute_project_path>
 ```
 
-Once you're done with KiND, clean up
+Use the `--skip` flag to skip re-generating the `doframework.yaml`.
 ```
-$ kind delete cluster
-$ docker stop registry
-$ docker rm registry
-```
-
-# OpenShift
-
-This assumes you've already set up your cluster. It assumes you have `kubectl`, `ibmcloud` and `oc` CLI installed.
-
-Log into IBM cloud services and follow the instructions.
-```
-$ ibmcloud login --sso
-```
-Generate a token for your openshift cluster (good for 24HR). Go to https://cloud.ibm.com (make sure your connection has access rights). Click on OpenShift Web Console (top right). Click on `IAM#user` and look for `Copy Login Command`. Copy the login command (`oc login ...`).
-```
-$ oc login --token=shaxxx~xxxx --server=https://xxx.xx-xx.xx.cloud.ibm.com:xxxxx
-```
-
-If you haven't already, define a new ray project [done once]. 
-```
-$ oc new-project ray
-```
-If you have already defined the "ray" project, you'll find it under `oc projects`.
-
-Upload `input.json` file(s) to your `<inputs_bucket>`.
-
-Run the bash script `doframework-setup.sh` to establish the `ray` cluster. Use the `--skip` flag to skip generating a new `doframework.yaml` file.
-```
-$ cd <user_project_folder>
 $ doframework-setup.sh --skip
 ```
-Otherwise, in case you are familiar with `ray`, run instead 
+Or, in case you are familiar with `ray`, run instead 
 ```
 $ ray up doframework.yaml --no-config-cache --yes
 ```
-
-Submit your application to the `ray` cluster
+Upload `input.json` file(s) to your `<inputs_bucket>`. Now you can submit your application `module.py` to the cluster
 ```
 $ ray submit doframework.yaml module.py
 ```
 
-Changing cluster resource allocation is done through `doframework.yaml`. Change `max_workers` to the max CPUs you have available [but keep max_workers of head node at 0]. You can play with `resources: requests: cpu, memory` and `resources: limits: cpu, memory` for the head and worker nodes. 
+# Ray Cluster
 
-After introducing changes to `doframework.yaml`, update with
-```
-$ ray up doframework.yaml --no-config-cache --yes
-```
-To see the `ray` dashboard, open a separate terminal and run
-```
-$ oc -n ray port-forward service/rayvens-cluster-head 8265:8265
-```
-In your browser, connect to `http://localhost:8265`.
+To observe the `ray` dashboard, connect to `http://localhost:8265` in your browser. See the OpenShift doc for OpenShift-specific instructions.
 
-Some useful health-check commands: check the status of `ray` pods
+Some useful health-check commands: 
+
+* Check the status of `ray` pods
 ```
 $ kubectl get pods -n ray
 ```
-Check status of the `ray` head node
+* Check the status of the `ray` head node
 ```
 $ kubectl describe pod rayvens-cluster-head-xxxxx -n ray
 ```
-Monitor autoscaling with
+* Monitor autoscaling with
 ```
 $ ray exec doframework.yaml 'tail -n 100 -f /tmp/ray/session_latest/logs/monitor*'
 ```
-Connect to a terminal on the head node
+* Connect to a terminal on the head node
 ```
 $ ray attach doframework.yaml
 $ ...
 $ exit
 ```
-Get a remote shell to the cluster manually (find head node ID with `kubectl describe`)
+* Get a remote shell to the cluster manually (find the head node ID with `kubectl describe`)
 ```
 $ kubectl -n ray exec -it rayvens-cluster-head-z97wc -- bash
 ```
+
+After introducing manual changes to `doframework.yaml`, update with
+```
+$ ray up doframework.yaml --no-config-cache --yes
+```
+
 Shutdown the `ray` cluster with
 ```
 $ ray down -y doframework.yaml
 ```
 
-# CPLEX
+# Test
 
-In case your application relies on a solver, such as `CPLEX`, you will need to mount it onto cluster nodes, if you wish to run your application on a cluster.
-
-To allow for a silent installation of `CPLEX`, create a `installer.properties` file under your project folder. Add the following lines to your `installer.properties` file:
+Run the setup bash script `doframework-setup.sh` with the `--example` flag to generate the test script  `doframework_example.py` in your project folder.
 ```
-INSTALLER_UI=silent
-LICENSE_ACCEPTED=true
-USER_INSTALL_DIR=/home/ray
-INSTALLER_LOCALE=en
+$ cd <user_project_folder>
+$ doframework-setup.sh  --configs ~/path/to/configs.yaml --example
 ```
 
-
-Add the following to your `doframework.yaml` file
+To run the test script locally, use
 ```
-file_mounts:
-    {
-        ...,
-        "/home/ray/cplex.bin": "/path/to/ILOG_COS_20.10_LINUX_X86_64.bin",
-        ...,
-        "/home/ray/installer.properties": "./installer.properties"
-    }
-file_mounts_sync_continuously: false   
-setup_commands:
-    - chmod u+x /home/ray/cplex.bin
-    - sudo bash /home/ray/cplex.bin -f "/home/ray/installer.properties"
-    - echo 'export PATH="$PATH:/home/ray/cplex/bin/x86-64_linux"' >> ~/.bashrc
-head_setup_commands:
-    ...
-```
-Make sure you are mounting the Linux OS `ILOG_COS_XX.XX_LINUX_X86_64.bin` binary. 
-
-Now update your `ray` cluster
-```
-$ ray up doframework.yaml --no-config-cache --yes 
+$ python doframework_example.py --configs ~/path/to/configs.yaml
 ```
 
-# OpenShift Login
-
-This assumes you have `ibmcloud` and `oc` CLI set up. Log into IBM cloud services and follow the instructions.
+To run the test script on your K8S cluster, use
 ```
-$ ibmcloud login --sso
+$ ray submit doframework.yaml doframework_example.py --configs configs.yaml
 ```
-Generate a token for your openshift cluster (good for 24hrs). Go to https://cloud.ibm.com (make sure your web connection has access rights). Click on `OpenShift Web Console` (top right). Click on your IAM\#user and look for `Copy Login Command`. Copy the login command [`oc login ...`]. Now run it
-```
-$ oc login --token=shaxxx~xxxx --server=https://xxx.xx-xx.xx.cloud.ibm.com:xxxxx
-```
+[NOTE: we are using the path to the `configs.yaml` that was mounted on cluster nodes under `$HOME`.]
 
-# Issues
-
----------------
-
-## Timing
-
-Timing can be a delicate issue when running a `doframework` experiment. Ray workers may get throttled by too many tasks, which reduces the compute resources per task, effectively choking that worker.
-
-One way to tackle this is to `ray submit` the application when the `<inputs_bucket>` is empty and then upload new `input.json` files at controlled time intervals. Finding the optimal rate may involve some trial and error.
-
----------------
-
-## Idle
-
-When an experiment goes idle, or it does not go through full cycle, this may have to do with `after_idle_for`. 
-
-The `after_idle_for` time window should be sufficiently large for simulation products to make it through to the next stage. This is especially true when optimization problem dimensions are higher, or when your algorithm takes longer.
-
----------------
-
-## Autoscaling on OpenShift
- 
- If you're having problems with scaling, for instance, the application is only running on the head node, you can start by checking the `ray` logs with
-```
-$ ray exec doframework.yaml 'tail -n 100 -f /tmp/ray/session_latest/logs/monitor*'
-```
-or just the error logs
-```
-$ ray exec doframework.yaml 'tail -n 100 -f /tmp/ray/session_latest/logs/monitor.err'
-```
-You may see an error
-```
-mkdir: cannot create directory '/home/ray/..': Permission denied
-```
-The problem is that OpenShift generates worker nodes on random user ids which do not have [permissions](https://docs.openshift.com/container-platform/3.11/admin_guide/manage_scc.html#enable-dockerhub-images-that-require-root) for file mounts. To fix the permissions issue, run
-```
-$ oc adm policy add-scc-to-group anyuid system:authenticated
-```
-
----------------
-
-## Consumed Uploads
-
-When files magically disappear when you upload them to the COS buckets, it may be that some `kamel` processes are still running, consuming any uploaded file. 
-
-You may be able to identify these `kamel` processes as source-type processes with
-```
-$ kubectl get all
-```
-To delete, use
-```
-$ kamel delete source-data source-inputs 
-```
-If that doesn't work, try shutting down `ray`.
-
----------------
-
-## SSH Unavailable
-Running the bash script `doframework-setup.sh`, or the `ray up` command, you may encounter the following 
-```
-Error from server (BadRequest): pod rayvens-cluster-head-mcsfh does not have a host assigned
-    SSH still not available (Exit Status 1): kubectl -n ray exec -it rayvens-cluster-head-mcsfh -- bash --login -c -i 'true && source ~/.bashrc && export OMP_NUM_THREADS=1 PYTHONWARNINGS=ignore && (uptime)', retrying in 5 seconds.
-```
-Just wait. Eventually it'll go through. If it ultimately fails, this may be a resources issue -- your cluster may be too small for the resources requested. Set the values of the variables `--mem` and / or `--cpu` to reflect your cluster resources when you run `doframework-setup.sh`.
-
----------------
-
-## Login
-
-When running `doframework-setup.sh`, you may see
-```
---- creating namespace
-error: You must be logged in to the server (Unauthorized)
---- installing Kamel operator
-error: You must be logged in to the server (Unauthorized)
-error: failed to create clusterrolebinding: Unauthorized
-error: You must be logged in to the server (Unauthorized)
-```
-This is an indication that you haven't logged into your cluster (see login instructions above). 
-
-The `doframework.yaml` was generated, though!
-
----------------
-
-## rayvens Image Update
-
-Any updates to the rayvens [image](https://quay.io/repository/ibm/rayvens?tab=tags) you wish to make can be editted in `doframework.yaml` under `containers: ... image: quay.io/ibm/rayvens:0.X.X`.
-
----------------
-
-## Nothing Generated
-
-If you only see `kamel` subprocesses after hitting `ray submit`, it's likely you haven't uploaded `input.json` files to `<inputs_bucket>`. You can upload then now -- no need to stop the experiment.
-
----------------
-
-## RayOutOfMemoryError
-
-You may run into insufficient memory errors such as `RayOutOfMemoryError: More than 95% of the memory on node rayvens-cluster-head-xxxxx is used`. 
-
-Make sure you have enough memory on your cluster and increase memory allowance in `doframework.yaml` under `resources:requests:memory:` and `resources:limits:memory:`.
+Make sure to upload input json files to `<inputs_bucket>` once you run `doframework_example.py`.
 
