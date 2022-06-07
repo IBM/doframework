@@ -19,7 +19,7 @@ install_requires = [
     'pandas',
     'matplotlib',
     'ray[default,serve,k8s]>=1.4.1',
-    'rayvens',
+    'rayvens>=0.5.0',
     'ibm-cos-sdk>=2.10.0',
     'boto3>=1.17.110',
     'aiohttp>=3.7.4',
