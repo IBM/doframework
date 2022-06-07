@@ -27,7 +27,7 @@ install_requires = [
     'scikit-learn>=0.24.1',
     'scipy',
     'PuLP>=2.4',
-    'GPy>=1.10.0'
+    'GPy>=1.9.9'
 ]
 
 setup(name='doframework',
