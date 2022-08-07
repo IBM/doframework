@@ -17,7 +17,10 @@
 import numpy as np
 from scipy.stats import gaussian_kde
 from scipy.integrate import quad
-import GPy
+from GPy.kern import RBF
+from GPy.models import GPRegression
+from GPy.core.parameterization.priors import Gamma
+from GPy.inference.mcmc import HMC
 
 def find_modal(samples, linspace_num: int=1000):
 
@@ -43,7 +46,7 @@ def gp_model(X: np.array,
              is_mcmc: bool=False, 
              num_samples: int=1000,
              hmc_iters: int=2,
-             linspace_num: int=1000) -> GPy.models.GPRegression:
+             linspace_num: int=1000) -> GPRegression:
     
     dim = X.shape[-1]
 
@@ -51,11 +54,11 @@ def gp_model(X: np.array,
 
         factor = 10.0 # TODO: clever factor for numerical issues in HMC train
 
-        kern = GPy.kern.RBF(input_dim=dim, ARD=True)
-        model = GPy.models.GPRegression(factor*X,y,kernel=kern.copy())    
+        kern = RBF(input_dim=dim, ARD=True)
+        model = GPRegression(factor*X,y,kernel=kern.copy())    
 
         # TODO: automate prior for RBF variance
-        model.kern.variance.set_prior(GPy.priors.Gamma.from_EV(0.1,0.1),warning=False)
+        model.kern.variance.set_prior(Gamma.from_EV(0.1,0.1),warning=False)
 
         lengthscales = {}
         for i in range(dim):
@@ -63,9 +66,9 @@ def gp_model(X: np.array,
             mean = quad(lambda x: x * kde.pdf(x), a=-np.inf, b=np.inf)[0]
             var = quad(lambda x: x**2 * kde.pdf(x), a=-np.inf, b=np.inf)[0] - mean**2
             lengthscales[i] = np.sqrt(var)
-            model.kern.lengthscale[[i]].set_prior(GPy.priors.Gamma.from_EV(lengthscales[i],lengthscales[i]/2),warning=False) # data variance as length scale
+            model.kern.lengthscale[[i]].set_prior(Gamma.from_EV(lengthscales[i],lengthscales[i]/2),warning=False) # data variance as length scale
 
-        hmc = GPy.inference.mcmc.HMC(model)
+        hmc = HMC(model)
         samples = hmc.sample(num_samples=num_samples,hmc_iters=hmc_iters)
 
         modals = {}          
@@ -74,8 +77,8 @@ def gp_model(X: np.array,
             if modal is not None:
                 modals[i] = modal
 
-        kern = GPy.kern.RBF(input_dim=dim, ARD=True)
-        model = GPy.models.GPRegression(X,y,kernel=kern.copy())    
+        kern = RBF(input_dim=dim, ARD=True)
+        model = GPRegression(X,y,kernel=kern.copy())    
 
         if (0 in modals) and (dim-1 in modals):            
             model.rbf.variance = modals[0]/factor**2
@@ -91,8 +94,8 @@ def gp_model(X: np.array,
 
     else:
 
-        kern = GPy.kern.RBF(input_dim=dim, ARD=True)
-        model = GPy.models.GPRegression(X,y,kernel=kern.copy())    
+        kern = RBF(input_dim=dim, ARD=True)
+        model = GPRegression(X,y,kernel=kern.copy())    
         
         # model.optimize_restarts(num_restarts=10,optimizer='lbfgs',verbose=False)
         model.optimize(optimizer='lbfgs',messages=False)
