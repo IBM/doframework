@@ -19,6 +19,7 @@ import numpy as np
 import random
 import string
 import logging
+import yaml
 from typing import Optional
 
 from doframework.core.utils import logger
@@ -75,13 +76,43 @@ def parse_vertex_num(sim_input: dict) -> int:
     
     return num
 
+def get_configs(configs_file, is_logger: bool=True):
+
+    with open(configs_file,'r') as file:
+        try:
+            configs = yaml.safe_load(file)
+            return configs
+        except yaml.YAMLError as e:
+            if is_logger:
+                print('({}) ERROR ... Could not load configs yaml. Check your path.'.format('root'))
+                print(e)
+            raise e        
+
+def legit_configs(configs):
+    
+    assert any(['s3' in configs, 'local' in configs]), 'configs file requires either an `s3` or a `local` field.'
+    assert not all(['s3' in configs, 'local' in configs]), 'choose either `s3` or `local` sources and targets in configs file, but not both.'
+
+    key = 's3'*('s3' in configs) + 'local'*('local' in configs)
+    storage = configs[key]
+    
+    assert 'buckets' in storage, 'configs files requires a list of storage resources under the field `buckets`'
+    
+    if key=='s3':
+        
+        assert 'cloud_service_provider' in storage, 'Missing s3:cloud_service_provider in configs.'
+        assert storage['cloud_service_provider'] in ['ibm','aws'], 'cloud_service_provider in configs must be either `aws` or `ibm`.'
+        assert 'region' in storage, 'Missing `region` field under `s3`'
+        assert 'aws_access_key_id' in storage, 'Missing `aws_access_key_id` field under `s3`'
+        assert 'aws_secret_access_key' in storage, 'Missing `aws_secret_access_key` field under `s3`'
+        if storage['cloud_service_provider'] == 'ibm':
+            assert 'endpoint_url' in storage, 'Missing `endpoint_url` field under `s3`'            
+
 #### TODO: assert if f[vertices] or omega has vertices and omega[vertices] has position then num of points > dim
 ####       assert if f[vertices] has position, then omega has vertices and omega[vertices] has either num or position
 ####       assert if f[values] has coeffs, then omega has vertices and omega[vertices] has either num or position
 @logger
-def legit_input(sim_input: dict, 
-                logger_name: Optional[str]=None, 
-                is_raised: Optional[bool]=False):
+def legit_input(sim_input: dict, logger_name: Optional[str]=None, is_raised: Optional[bool]=False):
     '''
     Test input validity. 
     
@@ -171,7 +202,6 @@ def legit_input(sim_input: dict,
 def generate_id(N: int=8) -> str:
     
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=N))
-
 
 def setup_logger(logger_name: str, log_file: str, level=logging.DEBUG, to_stream: bool=False):
     
