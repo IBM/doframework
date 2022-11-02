@@ -19,7 +19,7 @@ install_requires = [
     'pandas',
     'matplotlib',
     'ray[default,serve,k8s]>=1.4.1',
-    'rayvens>=0.5.0',
+    'rayvens>=0.6.0',
     'ibm-cos-sdk>=2.10.0',
     'boto3>=1.17.110',
     'aiohttp>=3.7.4',
@@ -31,8 +31,8 @@ install_requires = [
 ]
 
 setup(name='doframework',
-version='0.1.3',
-description='A testing framework for decision-optimization model learning algorithms.',
+version='0.1.4',
+description='A testing framework for optimization model learning algorithms.',
 long_description_content_type="text/markdown",
 long_description=open('README.md').read(),
 author='Orit Davidovich',
