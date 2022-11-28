@@ -389,6 +389,7 @@ def hit_and_run_square_test(N: int=5000, T: int=20, sigma_sq: float=1., L: float
     from scipy.stats import gaussian_kde
     
     points = np.array([[-L,-L],[-L,L],[L,-L],[L,L]])
+    d = points.shape[-1]
 
     hull = ConvexHull(points,qhull_options='QJ')
     vertices = points[hull.vertices,:]
@@ -398,6 +399,13 @@ def hit_and_run_square_test(N: int=5000, T: int=20, sigma_sq: float=1., L: float
     henze_zirkler_test = pg.multivariate_normality(X, alpha=.05)
     print('Henze-Zirkler multivariate normality sample test (at least 80% success rate):',henze_zirkler_test.normal)
 
+    x = X[-1,:]
+    ray = sphere_sample(d).flatten()
+    x1, x2 = chord_intersection(x,ray,hull.equations)
+    mu = projection(origin,x1,x2)
+    interval = np.vstack([x1,x2])
+    y, accept = chord_sample(mu, x1, x2)
+
     xproj = X[:,coord_projection]
     xmin = xproj.min()
     xmax = xproj.max()
@@ -405,10 +413,26 @@ def hit_and_run_square_test(N: int=5000, T: int=20, sigma_sq: float=1., L: float
     xs = np.linspace(xmin,xmax,linspace_num)
     density = kde.pdf(xs)
 
-    plt.figure(figsize=figsize)
-    plt.plot(xs,density,label='H&R Samples')
-    plt.plot(xs,norm(loc=0.,scale=sigma_sq**(0.5)).pdf(xs),label='Gaussian Samples')
-    plt.title(f'Hit & Run vs. Spherical Gaussian Samples with STD {sigma_sq**(0.5)} ({N} samples projected onto the {coord_projection}-th coordinate)')
+    fig = plt.figure(figsize=figsize)
+    
+    ax1 = fig.add_subplot(2,1,1)
+    ax1.plot(xs,density,label='H&R Samples')
+    ax1.plot(xs,norm(loc=0.,scale=sigma_sq**(0.5)).pdf(xs),label='Gaussian Samples')
+    ax1.set_title(f'Hit & Run vs. Spherical Gaussian Samples with STD {sigma_sq**(0.5)} ({N} samples projected onto the {coord_projection}-th coordinate)')
+
+    ax2 = fig.add_subplot(2,1,2)
+    convex_hull_plot_2d(hull, ax=ax2)
+    ax2.plot(np.atleast_2d(interval)[:,0],np.atleast_2d(interval)[:,1],c='pink',label='chord')
+    ax2.scatter(np.atleast_2d(interval)[:,0],np.atleast_2d(interval)[:,1],s=60,c='pink')
+    ax2.scatter(np.atleast_2d(X)[:,0],np.atleast_2d(X)[:,1],s=20,c='y',alpha=0.3,label='Xs')
+    ax2.scatter(np.atleast_2d(origin)[:,0],np.atleast_2d(origin)[:,1],s=80,c='black',label='origin')
+    ax2.scatter(np.atleast_2d(y)[:,0],np.atleast_2d(y)[:,1],s=40,c='r',label='y')
+    ax2.scatter(np.atleast_2d(mu)[:,0],np.atleast_2d(mu)[:,1],s=40,c='b',label='mu')
+    ax2.arrow(mu[0],mu[1],ray[0],ray[1],head_width=0.3)
+    ax2.set_title(f'Hit & Run sample along a Chord (sample accepted={accept})')
+
+    plt.grid()
+    plt.legend(loc='lower right')    
     plt.legend()
     plt.show()
 
