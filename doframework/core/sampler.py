@@ -14,30 +14,21 @@
 # limitations under the License.
 #
 
+import itertools as it
+import logging
 from typing import Optional, List
+
 import numpy as np
+import numpy.linalg as la
 from scipy.stats import rv_continuous
 from scipy.stats import norm, uniform
-import itertools as it
+from scipy.stats import gmean
+from scipy.spatial import ConvexHull
 
 from doframework.core.pwl import PWL, Polyhedron
+from doframework.core.hit_and_run import scale, get_hull, support, rounding, hit_and_run
 
-def sample_f_values(f_range: List, N: int=1) -> np.array:
-    '''
-    Sample function values from a given range.
-    
-            Parameters:
-                    f_range (List): range of function values.
-                    N (int): sample size.
-                    
-            Returns:
-                    Sample of size N from uniform distribution defined by f_range.
-                    
-    '''
-    
-    return uniform(f_range[0],f_range[1]-f_range[0]).rvs(N)
-
-def X_hypothesis_sampler(hypothesis, I: int, weights: list, **kwargs):
+def X_hypothesis_sampler_legacy(hypothesis, I: int, weights: list, **kwargs):
     
     while True:
         
@@ -68,7 +59,7 @@ def X_sampler_legacy(f: PWL, hypothesis, N: int, weights: list, **kwargs):
     assert abs(sum(weights)-1)<epsilon, 'Weights must add up to 1.'
             
     return np.concatenate(list(it.islice(filter(lambda x: f.isin(x)[0],
-                                                X_hypothesis_sampler(hypothesis,
+                                                X_hypothesis_sampler_legacy(hypothesis,
                                                                     Is[0],
                                                                     weights,
                                                                     **kwargs)),N)))
@@ -80,6 +71,21 @@ def D_sampler_legacy(f: PWL, hypothesis, N: int, weights: list, noise: float, **
     D = np.concatenate((X, y.reshape(-1,1)), 1)
     
     return D       
+
+def sample_f_values(f_range: List, N: int=1) -> np.array:
+    '''
+    Sample function values from a given range.
+    
+            Parameters:
+                    f_range (List): range of function values.
+                    N (int): sample size.
+                    
+            Returns:
+                    Sample of size N from uniform distribution defined by f_range.
+                    
+    '''
+    
+    return uniform(f_range[0],f_range[1]-f_range[0]).rvs(N)
 
 def omega_hypothesis_sampler(hypothesis: rv_continuous, J: int, i: int, **kwargs):
     
@@ -166,3 +172,136 @@ def omega_sampler(f: Optional[PWL], hypothesis: rv_continuous, num_tries: int=10
             omega_samples.append(sample)
             
     return np.atleast_2d(omega_samples) if omega_samples is not None else omega_samples
+
+def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
+    '''
+    Sample from a mixed Gaussian distribution restricted to a union of polytopes Ps. 
+    Samples will be in the convex hull of the union of Ps.
+    Sampling is done using the Hit & Run algorithm following the work of
+    Ben Cousins in Efficient High-dimensional Sampling and Integration.
+    
+            Parameters:
+                    Ps (np.array): Polytopes.
+                    N (int): Overall sample size.
+                    weights (list): Weight of each Gaussian in the mix [must add up to 1].
+                    num_cpus (int): Number of CPUs to parallelize sampling (default: 1).
+
+                    
+            Returns:
+                    N samples (np.array).
+                    
+    '''
+
+    means = kwargs['mean']
+    covariances = kwargs['cov']
+    
+    # rounding the polytope
+    is_round = kwargs['is_round'] if 'is_round' in kwargs else True 
+    # upper bound on spherical Gaussian sigmas
+    upper_bound = kwargs['upper_bound'] if 'upper_bound' in kwargs else np.inf 
+    # lower bound on spherical Gaussian sigmas
+    lower_bound = kwargs['lower_bound'] if 'lower_bound' in kwargs else 1.0
+    # rounding threshold
+    delta = kwargs['delta'] if 'delta' in kwargs else 0.1 
+    # hit-and-run mix time
+    T = kwargs['T'] if 'T' in kwargs else 1 
+    # sensitivity 
+    tol = kwargs['tol'] if 'tol' in kwargs else 1e-10 
+    
+    objective_id = kwargs['objective_id'] if 'objective_id' in kwargs else ''
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
+    
+    assert abs(sum(weights)-1)<tol, 'Weights must add up to 1.'
+
+    lens = [len(means),len(covariances),len(weights)]    
+    assert min(lens) == max(lens), 'Unequal number of policies, covariances, and weights.'    
+
+    Ns = [int(w*N) for w in weights]
+    Ns[-1] += N-sum(Ns)
+
+    points = np.unique(np.vstack(Ps),axis=0)
+    hull, _, _ = get_hull(points)
+    d = points.shape[-1]
+    
+    Xs = []
+    sample_slice = kwargs['sample_slice'] if 'sample_slice' in kwargs else slice(0,len(Ns))
+
+    for n, mean, covariance in zip(Ns[sample_slice], means[sample_slice], covariances[sample_slice]):
+
+        u, s, uT = la.svd(covariance,full_matrices=False)
+        B = np.diag(s**(0.5)) @ uT # square root of covariance
+        Binv = u @ np.diag(s**(-0.5))
+        
+        assert np.all(np.isclose(B@Binv, np.eye(d), atol=tol)), 'Root of covariance and its inverse multiply to I.'
+        assert np.all(np.isclose(covariance, (u @ np.diag(s**(0.5))) @ (np.diag(s**(0.5)) @ uT), atol=tol)), \
+        'Retrieve original covariance from SVD decomposition.'
+
+        points_init = points @ B
+        mean_init = mean @ B
+        hull_init, _, simplices_init = get_hull(points_init)
+        shift_init = mean_init
+        scale_init = scale(mean_init, simplices_init[:,0,:], hull_init.equations[:,:-1])
+
+        # shift & scale for unit ball around mean inside polytope
+        points_tmp = (points_init-shift_init)/scale_init
+        mean_tmp = (mean_init-shift_init)/scale_init
+
+        # round polytope. no rounding iff A = I.
+        if is_round:
+            points_tmp, A = rounding(points_tmp,tol=tol)
+        else:
+            A = np.eye(d)
+        Ainv = la.inv(A)
+        Avals = la.eigvals(A)
+        
+        mean_tmp = (A@mean_tmp.T).T
+        hull_tmp, _, simplices_tmp = get_hull(points_tmp)
+
+        # shift & scale for unit ball around mean inside rounded polytope
+        shift_tmp = mean_tmp
+        scale_tmp = scale(mean_tmp, simplices_tmp[:,0,:], hull_tmp.equations[:,:-1])
+        points_tmp = (points_tmp-shift_tmp)/scale_tmp
+        mean_tmp = (mean_tmp-shift_tmp)/scale_tmp
+
+        hull_tmp, _, _ = get_hull(points_tmp)
+
+        # when A = I, sigma_sq is scaled to produce samples from cov.
+        # when A != I, produced samples are not from cov, but from A @ cov @ A^T.
+        # then, sigma_sq is additionally scaled by A evals.
+        sigma = max(min(upper_bound,1/scale_init * gmean(Avals) * 1/scale_tmp),lower_bound)
+        sigma_sq = sigma**2
+
+        if logger_name:
+            log = logging.getLogger(logger_name)
+            log.info(f'Produce {n} samples for policy {mean} with sigma {sigma:.3f}.')        
+            
+        X = hit_and_run(n,mean_tmp,hull_tmp.equations,T,delta,sigma_sq=sigma_sq,num_cpus=num_cpus)
+
+        # reverse apply transformations
+        X = scale_tmp*X+shift_tmp
+        X = X@Ainv
+        X = scale_init*X+shift_init
+        X = X@Binv
+
+        Xs.append(X)
+    
+    X = np.vstack(Xs)
+    np.random.shuffle(X)
+    
+    assert np.all(support(X, hull.equations)), f'SANITY: samples not inside polytope for objective {objective_id}!'
+    
+    if len(Ns[sample_slice])==len(Ns):
+        assert np.unique(X,axis=1).shape[0]==N, f'SANITY: {np.unique(X,axis=1).shape[0]} unique samples generated, but required {N} samples.'
+    
+    return X
+
+def D_sampler(f: PWL, N: int, weights: list, noise: float, **kwargs): 
+        
+    domain_scale = np.power(f.volume(),1/f.dim)
+    
+    X = X_sampler(f.Ps,N,weights,upper_bound=1.2*domain_scale,lower_bound=0.2*domain_scale,**kwargs)
+    y = f.evaluate(X) + norm(loc=0,scale=noise).rvs(size=X.shape[0])
+    D = np.concatenate((X, y.reshape(-1,1)), 1)
+    
+    return D       
