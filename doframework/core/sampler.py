@@ -45,7 +45,7 @@ def X_hypothesis_sampler(hypothesis, I: int, weights: list, **kwargs):
     
         yield np.atleast_2d(hypothesis(**{k: v[i] for k,v in kwargs.items()}).rvs())
 
-def X_sampler(f: PWL, hypothesis, N: int, weights: list, **kwargs):
+def X_sampler_legacy(f: PWL, hypothesis, N: int, weights: list, **kwargs):
     '''
     Sample from a mixed distribution given a hypothesis. Samples will be in Supp(f).
     
@@ -73,9 +73,9 @@ def X_sampler(f: PWL, hypothesis, N: int, weights: list, **kwargs):
                                                                     weights,
                                                                     **kwargs)),N)))
 
-def D_sampler(f: PWL, hypothesis, N: int, weights: list, noise: float, **kwargs):
+def D_sampler_legacy(f: PWL, hypothesis, N: int, weights: list, noise: float, **kwargs):
     
-    X = X_sampler(f,hypothesis,N,weights,**kwargs)
+    X = X_sampler_legacy(f,hypothesis,N,weights,**kwargs)
     y = f.evaluate(X) + norm(loc=0,scale=noise).rvs(size=X.shape[0])
     D = np.concatenate((X, y.reshape(-1,1)), 1)
     
