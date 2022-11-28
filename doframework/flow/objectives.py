@@ -116,7 +116,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     if 'position' in f['vertices']:
         
         f_points = np.atleast_2d(np.array(f['vertices']['position']))
-        f_supp_range = np.array([[f_points[:,i].min(),f_points[:,i].max()] for i in range(dim)])
+        f_domain_range = np.array([[f_points[:,i].min(),f_points[:,i].max()] for i in range(dim)])
         f_hull = ConvexHull(f_points,qhull_options='QJ')
         f_P = f_hull.points[f_hull.vertices,:]
         if logger_name:
@@ -148,7 +148,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
                 
     else:
 
-        f_supp_range = np.atleast_2d(np.array(f['vertices']['range']))
+        f_domain_range = np.atleast_2d(np.array(f['vertices']['range']))
         f_P = np.vstack(list(map(np.array, it.product(*f['vertices']['range']))))        
         
         if 'coeffs' in f['values']:
@@ -183,7 +183,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
             p_process = Process(uniform(scale=p))
             q_process = Process(uniform(scale=q))
 
-            f_supp, omega_supp = triangulation(f_supp_range, f_range, ratio, vertex_num, dim, p_process, q_process, regularization_min_prob, logger_name=logger_name, is_raised=is_raised)            
+            f_supp, omega_supp = triangulation(f_domain_range, f_range, ratio, vertex_num, dim, p_process, q_process, regularization_min_prob, logger_name=logger_name, is_raised=is_raised)            
             f_Ps = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(f_supp)])
             f_Vs = flatten([[leaf.poly.values for leaf in tree.leaves()] for tree in flatten(f_supp)])
             omega_Ps = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(omega_supp)])
@@ -193,11 +193,11 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     output['f']['values'] = [list(V) for V in f_Vs]
 
     pwl = PWL(f_Ps,f_Vs)
-    f_supp_scale = np.power(pwl.volume(),1/dim) # width parameter, approx of f domain diameter 
+    domain_scale = np.power(pwl.volume(),1/dim) # domain "radius" parameter
 
     omega_hull = ConvexHull(np.vstack(omega_Ps))
-    omega_locs = omega_hull.points[omega_hull.vertices,:] # this may shift original vertices on the order of 1e-8
-    omega_scales = np.random.rand(*omega_locs.shape)*omega['scale']*f_supp_scale
+    omega_locs = omega_hull.points[omega_hull.vertices,:] # may shift original vertices by order of 1e-8
+    omega_scales = np.random.rand(*omega_locs.shape)*omega['scale']*domain_scale
 
     output['omega']['polyhedrons'] = [[list(point) for point in P] for P in omega_Ps]
     output['omega']['hypothesis'] = omega['hypothesis'] if 'hypothesis' in omega else 'norm'
@@ -207,7 +207,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     policies = pwl.sample(data['policy_num'])
     eigenvals = np.vstack([sample_standard_simplex(dim)*dim for _ in range(data['policy_num'])])
     corrs = [random_correlation.rvs(e) for e in eigenvals]
-    sigmas = [np.random.rand(dim)*data['scale']*f_supp_scale for _ in range(data['policy_num'])]
+    sigmas = [np.random.rand(dim)*data['scale']*domain_scale for _ in range(data['policy_num'])]
     covs = [np.diag(sigma) @ corr @ np.diag(sigma) for corr, sigma in zip(corrs,sigmas)]
     weights = sample_standard_simplex(data['policy_num'])
 
@@ -217,6 +217,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     output['data']['covariances'] = [[list(row) for row in cov] for cov in covs]
     output['data']['weights'] = list(weights)
     output['data']['noise'] = data['noise']*(np.array(f_Vs).max()-np.array(f_Vs).min())
+    output['data']['scale'] = data['scale']
 
     opt_fns = {'min': np.nanargmin, 'max': np.nanargmax}
     for opt in ['min','max']:    
