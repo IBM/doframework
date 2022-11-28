@@ -25,8 +25,8 @@ from scipy.stats import norm, uniform
 from scipy.stats import gmean
 from scipy.spatial import ConvexHull
 
-from doframework.core.pwl import PWL, Polyhedron
-from doframework.core.hit_and_run import scale, get_hull, support, rounding, hit_and_run
+from doframework.core.pwl import PWL
+from doframework.core.hit_and_run import scale, get_hull, in_domain, rounding, hit_and_run
 
 def X_hypothesis_sampler_legacy(hypothesis, I: int, weights: list, **kwargs):
     
@@ -202,11 +202,11 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
     # lower bound on spherical Gaussian sigmas
     lower_bound = kwargs['lower_bound'] if 'lower_bound' in kwargs else 1.0
     # rounding threshold
-    delta = kwargs['delta'] if 'delta' in kwargs else 0.1 
+    round_threshold = kwargs['round_threshold'] if 'round_threshold' in kwargs else 0.1
     # hit-and-run mix time
     T = kwargs['T'] if 'T' in kwargs else 1 
     # sensitivity 
-    tol = kwargs['tol'] if 'tol' in kwargs else 1e-10 
+    tol = kwargs['tol'] if 'tol' in kwargs else 1e-8
     
     objective_id = kwargs['objective_id'] if 'objective_id' in kwargs else ''
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
@@ -249,7 +249,7 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
 
         # round polytope. no rounding iff A = I.
         if is_round:
-            points_tmp, A = rounding(points_tmp,tol=tol)
+            points_tmp, A = rounding(points_tmp,round_threshold,tol=tol)
         else:
             A = np.eye(d)
         Ainv = la.inv(A)
@@ -272,11 +272,16 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
         sigma = max(min(upper_bound,1/scale_init * gmean(Avals) * 1/scale_tmp),lower_bound)
         sigma_sq = sigma**2
 
+        # sigma for warm start
+        warm_sigma = kwargs['warm_sigma'] if 'warm_sigma' in kwargs else 0.1*sigma
+        warm_sigma_sq = warm_sigma**2
+
+
         if logger_name:
             log = logging.getLogger(logger_name)
             log.info(f'Produce {n} samples for policy {mean} with sigma {sigma:.3f}.')        
             
-        X = hit_and_run(n,mean_tmp,hull_tmp.equations,T,delta,sigma_sq=sigma_sq,num_cpus=num_cpus)
+        X = hit_and_run(n,mean_tmp,hull_tmp.equations,T,warm_sigma_sq,sigma_sq=sigma_sq,num_cpus=num_cpus,tol=tol)
 
         # reverse apply transformations
         X = scale_tmp*X+shift_tmp
@@ -289,7 +294,7 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
     X = np.vstack(Xs)
     np.random.shuffle(X)
     
-    assert np.all(support(X, hull.equations)), f'SANITY: samples not inside polytope for objective {objective_id}!'
+    assert np.all(in_domain(X, hull.equations, tol=tol)), f'SANITY: samples not inside polytope for objective {objective_id}!'
     
     if len(Ns[sample_slice])==len(Ns):
         assert np.unique(X,axis=1).shape[0]==N, f'SANITY: {np.unique(X,axis=1).shape[0]} unique samples generated, but required {N} samples.'
