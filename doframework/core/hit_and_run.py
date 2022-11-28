@@ -169,7 +169,7 @@ def rounding(points: np.array, threshold: float=0.1, M: int=500, tol: float=1e-8
     
     return round_points, T
 
-def support(xs, A: np.array, R: Optional[float]=None, **kwargs) -> np.array:
+def in_domain(xs, A: np.array, R: Optional[float]=None, **kwargs) -> np.array:
     '''
     Check whether xs are inside the intersection of a convex polytope and a ball of radius R.
     The convex polytope is given by the matrix A such that Ax<=0 defines it.
@@ -217,7 +217,7 @@ def warm_start(mu: np.array, A: np.array, sigma_sq: float, N: int=1, **kwargs) -
                     
     '''    
             
-    return np.array(list(islice(filter(lambda x: support(x[None,:],A,**kwargs)[0],_warm_yield(mu,sigma_sq)),N)))
+    return np.array(list(islice(filter(lambda x: in_domain(x[None,:],A,**kwargs)[0],_warm_yield(mu,sigma_sq)),N)))
 
 def _chord_interval(mu: np.array, x1: np.array, x2: np.array) -> tuple:
     '''
@@ -363,7 +363,7 @@ def hit_and_run(N: int,
     return np.array(xs)
 
 def hit_and_run_square_test(N: int=5000, T: int=20, sigma_sq: float=1., L: float=10.0, delta: float=0.1, 
-                            linspace_num: int=500, coord_projection: int=0, figsize: tuple=(7,4), num_cpus: int=4):
+                            linspace_num: int=500, coord_projection: int=0, figsize: tuple=(7,8), num_cpus: int=4, tol: float=1e-8):
     '''
     Test the Hit & Run algorithm by sampling in a large box a relatively small spherical Gaussian.
     Multivariate normality is tested with the Henze-Zikler test.
@@ -395,16 +395,16 @@ def hit_and_run_square_test(N: int=5000, T: int=20, sigma_sq: float=1., L: float
     vertices = points[hull.vertices,:]
     origin = np.average(vertices,axis=0)[None,:]
 
-    X = hit_and_run(N,origin,hull.equations,T,delta,sigma_sq=sigma_sq,num_cpus=num_cpus)
+    X = hit_and_run(N,origin,hull.equations,T,delta,sigma_sq=sigma_sq,num_cpus=num_cpus,tol=tol)
     henze_zirkler_test = pg.multivariate_normality(X, alpha=.05)
-    print('Henze-Zirkler multivariate normality sample test (at least 80% success rate):',henze_zirkler_test.normal)
+    print('Henze-Zirkler multivariate normality sample test:',henze_zirkler_test.normal)
 
     x = X[-1,:]
     ray = sphere_sample(d).flatten()
     x1, x2 = chord_intersection(x,ray,hull.equations)
     mu = projection(origin,x1,x2)
     interval = np.vstack([x1,x2])
-    y, accept = chord_sample(mu, x1, x2)
+    y, accept = chord_sample(mu, x1, x2, sigma_sq=sigma_sq)
 
     xproj = X[:,coord_projection]
     xmin = xproj.min()
@@ -419,6 +419,7 @@ def hit_and_run_square_test(N: int=5000, T: int=20, sigma_sq: float=1., L: float
     ax1.plot(xs,density,label='H&R Samples')
     ax1.plot(xs,norm(loc=0.,scale=sigma_sq**(0.5)).pdf(xs),label='Gaussian Samples')
     ax1.set_title(f'Hit & Run vs. Spherical Gaussian Samples with STD {sigma_sq**(0.5)} ({N} samples projected onto the {coord_projection}-th coordinate)')
+    ax1.legend(loc='upper right')
 
     ax2 = fig.add_subplot(2,1,2)
     convex_hull_plot_2d(hull, ax=ax2)
@@ -428,19 +429,18 @@ def hit_and_run_square_test(N: int=5000, T: int=20, sigma_sq: float=1., L: float
     ax2.scatter(np.atleast_2d(origin)[:,0],np.atleast_2d(origin)[:,1],s=80,c='black',label='origin')
     ax2.scatter(np.atleast_2d(y)[:,0],np.atleast_2d(y)[:,1],s=40,c='r',label='y')
     ax2.scatter(np.atleast_2d(mu)[:,0],np.atleast_2d(mu)[:,1],s=40,c='b',label='mu')
-    ax2.arrow(mu[0],mu[1],ray[0],ray[1],head_width=0.3)
-    ax2.set_title(f'Hit & Run sample along a Chord (sample accepted={accept})')
-
-    plt.grid()
-    plt.legend(loc='lower right')    
-    plt.legend()
+    ax2.set_title(f'Hit & Run sample along a chord (sample accepted={accept})')
+    ax2.grid()
+    ax2.legend(loc='lower right')  
+    
     plt.show()
 
 def plot_polytope(hull: ConvexHull, origin: np.array=np.array([]), X: np.array=np.array([]), figsize: tuple=(7,7), elevation: int=25, azimute: int=150, **kwargs):
 
     import matplotlib.pyplot as plt
     
-    d = hull.points.shape[-1]
+    points = hull.points
+    d = points.shape[-1]
     plot_sample = False
     
     if X.size>0:
@@ -460,6 +460,8 @@ def plot_polytope(hull: ConvexHull, origin: np.array=np.array([]), X: np.array=n
             
         if plot_origin:
             ax.scatter(np.atleast_2d(origin)[:,0],np.atleast_2d(origin)[:,1],s=80,c='black',label='origin')
+
+        ax.scatter(np.atleast_2d(points)[:,0],np.atleast_2d(points)[:,1],color='b',s=40,label='points')        
             
         plt.grid()
         plt.legend(loc='lower right')
@@ -474,8 +476,7 @@ def plot_polytope(hull: ConvexHull, origin: np.array=np.array([]), X: np.array=n
 
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(projection='3d')
-        
-        points = hull.points
+                
         simplices = points[hull.simplices,:]
 
         for i,s in enumerate(simplices):
