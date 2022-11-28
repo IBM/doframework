@@ -23,6 +23,7 @@ from pathlib import Path
 import yaml
 import json
 from datetime import datetime
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -30,9 +31,9 @@ import scipy.stats
 
 from doframework.core.inputs import generate_id, setup_logger
 from doframework.core.pwl import PWL
-from doframework.core.sampler import D_sampler
+from doframework.core.sampler import D_sampler, D_sampler_legacy
 
-def generate_dataset(obj_input: dict, obj_name: str, **kwargs):
+def generate_dataset(obj_input: dict, obj_name: str, logger_name: Optional[str]=None, is_raised: Optional[bool]=False, **kwargs) -> Tuple[pd.DataFrame, str]:
     
     input_prefix = 'objective'
     input_suffix = 'json'
@@ -56,14 +57,12 @@ def generate_dataset(obj_input: dict, obj_name: str, **kwargs):
     data_hypothesis = obj_input['data']['hypothesis']
     data_hypothesis_obj = getattr(scipy.stats,data_hypothesis)
 
-    D = D_sampler(f, data_hypothesis_obj, N, weights, noise, mean=policies, cov=covariances)
+    # D = D_sampler_legacy(f, data_hypothesis_obj, N, weights, noise, mean=policies, cov=covariances)
+    D = D_sampler(f, N, weights, noise, mean=policies, cov=covariances, logger_name=logger_name, is_raised=is_raised)
     
     df = pd.DataFrame(D,columns=[f'x{i}' for i in range(D.shape[1]-1)]+['y'])
     generated_file = ''.join(['_'.join([output_prefix,objective_id,data_id]),'.',output_suffix])
 
-    #### NOTE: add file name till rayvens allows to read file name from source bucket event
-    # df = pd.concat([df,pd.DataFrame([generated_file]*df.shape[0],columns=['generated_file_name'])],axis=1) 
-    
     return df, generated_file
 
 def main(data_root: str, args: dict, logger_name: str=None, is_raised=True):
@@ -87,7 +86,7 @@ def main(data_root: str, args: dict, logger_name: str=None, is_raised=True):
                 
             for i in range(args.datasets):
                 
-                df, gen_data_file = generate_dataset(obj_input,obj_name)                
+                df, gen_data_file = generate_dataset(obj_input,obj_name,logger_name,is_raised)               
                 gen_data_path = os.path.join(data_root,'data',gen_data_file)                
                 df.to_csv(gen_data_path,index=False)
                 
@@ -101,6 +100,11 @@ def main(data_root: str, args: dict, logger_name: str=None, is_raised=True):
             if logger_name:
                 log = logging.getLogger(logger_name)
                 log.error('Error occured while decoding obective json.\n')
+                log.error(e)
+            if is_raised: raise e
+        except AssertionError as e:
+            if logger_name:
+                log = logging.getLogger(logger_name)
                 log.error(e)
             if is_raised: raise e
         except Exception as e:
