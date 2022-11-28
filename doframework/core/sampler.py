@@ -195,17 +195,11 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
     means = kwargs['mean']
     covariances = kwargs['cov']
     
-    # rounding the polytope
     is_round = kwargs['is_round'] if 'is_round' in kwargs else True 
-    # upper bound on spherical Gaussian sigmas
-    upper_bound = kwargs['upper_bound'] if 'upper_bound' in kwargs else np.inf 
-    # lower bound on spherical Gaussian sigmas
-    lower_bound = kwargs['lower_bound'] if 'lower_bound' in kwargs else 1.0
-    # rounding threshold
     round_threshold = kwargs['round_threshold'] if 'round_threshold' in kwargs else 0.1
-    # hit-and-run mix time
+    upper_bound = kwargs['upper_bound'] if 'upper_bound' in kwargs else np.inf 
+    lower_bound = kwargs['lower_bound'] if 'lower_bound' in kwargs else 1.0
     T = kwargs['T'] if 'T' in kwargs else 1 
-    # sensitivity 
     tol = kwargs['tol'] if 'tol' in kwargs else 1e-8
     
     objective_id = kwargs['objective_id'] if 'objective_id' in kwargs else ''
