@@ -32,7 +32,8 @@ Args = namedtuple(
         'mock',
         'after_idle_for',
         'rayvens_logs',
-        'alg_num_cpus'
+        'alg_num_cpus',
+        'data_num_cpus'
         ]
     )
 
@@ -194,20 +195,20 @@ def _number_of_iterations(process_input, args, process_type):
 def _get_extra_input(input_name, process_type, configs, args, buckets):
     try:
         if process_type == 'input':
-            extra = {}
+            extra = {'mock': args.mock}
         elif process_type == 'objective':
-            extra = {}
+            extra = {'mock': args.mock}
         elif process_type == 'data':
             files = files_from_data(input_name)
             storage = Storage(configs)
             objective = storage.get(buckets['objectives_dest'],files['objective'])
-            extra = {'objective': json.load(objective)}
+            extra = {'num_cpus': args.data_num_cpus, 'objective': json.load(objective), 'mock': args.mock}
         elif process_type == 'solution':
             files = files_from_solution(input_name)
             storage = Storage(configs)
             objective = storage.get(buckets['objectives_dest'],files['objective'])
             data = storage.get(buckets['data_dest'],files['data'])
-            extra = {'is_mcmc': args.mcmc, 'objective': json.load(objective), 'data': pd.read_csv(data)}
+            extra = {'is_mcmc': args.mcmc, 'objective': json.load(objective), 'data': pd.read_csv(data), 'mock': args.mock}
         else:
             extra = None
         return extra
@@ -223,7 +224,7 @@ def _get_extra_input(input_name, process_type, configs, args, buckets):
 def _process(process_type, configs, args, buckets, **kwargs):
     def proc(f):
         
-        @ray.remote(num_cpus=1)
+        @ray.remote(num_cpus=1) # change !!! 
         def f_dist(*args,**kwargs):
             return f(*args,**kwargs)
 
@@ -258,7 +259,7 @@ def _process(process_type, configs, args, buckets, **kwargs):
                         print('({}) INFO ... Process working on event {} uses extra input {}.'.format(process_type,input_name,list(extra.keys())))
                     else:
                         print('({}) INFO ... Process working on event {} does not require extra input.'.format(process_type,input_name))
-                extra = {**extra,**kwargs,**configs,**{'mock': args.mock}}
+                extra = {**extra,**kwargs,**configs}
 
                 if args.distribute:
                     _ = [f_dist.remote(context, process_input, input_name, **extra) for _ in range(n)]
@@ -311,8 +312,9 @@ def run(generate_user_solution, configs_file, **kwargs):
     after_idle_for = kwargs['after_idle_for'] if 'after_idle_for' in kwargs else 200
     rayvens_logs = kwargs['rayvens_logs'] if 'rayvens_logs' in kwargs else False
     alg_num_cpus = int(kwargs['alg_num_cpus']) if 'alg_num_cpus' in kwargs else 1
+    data_num_cpus = int(kwargs['data_num_cpus']) if 'data_num_cpus' in kwargs else 1
 
-    args = Args(objectives, datasets, feasibility_regions, run_mode, distribute, mcmc, logger, mock, after_idle_for, rayvens_logs, alg_num_cpus)
+    args = Args(objectives, datasets, feasibility_regions, run_mode, distribute, mcmc, logger, mock, after_idle_for, rayvens_logs, alg_num_cpus, data_num_cpus)
 
     if args.run_mode == 'operator':
         ray.init(address='auto')
