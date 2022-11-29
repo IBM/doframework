@@ -33,12 +33,15 @@ from doframework.core.inputs import generate_id, setup_logger
 from doframework.core.pwl import PWL
 from doframework.core.sampler import D_sampler, D_sampler_legacy
 
-def generate_dataset(obj_input: dict, obj_name: str, logger_name: Optional[str]=None, is_raised: Optional[bool]=False, **kwargs) -> Tuple[pd.DataFrame, str]:
+def generate_dataset(obj_input: dict, obj_name: str, **kwargs) -> Tuple[pd.DataFrame, str]:
     
     input_prefix = 'objective'
     input_suffix = 'json'
     output_prefix = 'data'
     output_suffix = 'csv'
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
 
     objective_id = re.match(input_prefix+'_'+'(\w+)'+'.'+input_suffix,obj_name).group(1)
     assert objective_id == obj_input['objective_id'], 'Mismatch between file name recorded in json and file name.'
@@ -58,14 +61,18 @@ def generate_dataset(obj_input: dict, obj_name: str, logger_name: Optional[str]=
     data_hypothesis_obj = getattr(scipy.stats,data_hypothesis)
 
     # D = D_sampler_legacy(f, data_hypothesis_obj, N, weights, noise, mean=policies, cov=covariances)
-    D = D_sampler(f, N, weights, noise, mean=policies, cov=covariances, logger_name=logger_name, is_raised=is_raised)
+    D = D_sampler(f, N, weights, noise, 
+                    mean=policies, cov=covariances, objective_id=objective_id, logger_name=logger_name, is_raised=is_raised, num_cpus=num_cpus)
     
     df = pd.DataFrame(D,columns=[f'x{i}' for i in range(D.shape[1]-1)]+['y'])
     generated_file = ''.join(['_'.join([output_prefix,objective_id,data_id]),'.',output_suffix])
 
     return df, generated_file
 
-def main(data_root: str, args: dict, logger_name: str=None, is_raised=True):
+def main(data_root: str, args: argparse.Namespace, **kwargs):
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = args.is_raised
 
     for p in Path(os.path.join(data_root,'objectives')).rglob('*.json'):
         
@@ -82,12 +89,12 @@ def main(data_root: str, args: dict, logger_name: str=None, is_raised=True):
             
             if logger_name:
                 log = logging.getLogger(logger_name)
-                log.info('Sampling {} datasets for {}.'.format(args.datasets,obj_id))        
+                log.info('Sampling {} datasets for {} with {} CPUs.'.format(args.datasets,obj_id,args.cpus))        
                 
             for i in range(args.datasets):
                 
-                df, gen_data_file = generate_dataset(obj_input,obj_name,logger_name,is_raised)               
-                gen_data_path = os.path.join(data_root,'data',gen_data_file)                
+                df, gen_data_file = generate_dataset(obj_input,obj_name,logger_name=logger_name,is_raised=is_raised,num_cpus=args.cpus)              
+                gen_data_path = os.path.join(data_root,'data',gen_data_file)
                 df.to_csv(gen_data_path,index=False)
                 
         except IOError as e:
@@ -117,8 +124,10 @@ def main(data_root: str, args: dict, logger_name: str=None, is_raised=True):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--datasets", type=int, default=1, help="Number of datasets to generate.")
+    parser.add_argument("-s", "--datasets", type=int, default=1, help="Number of datasets to generate (default: 1).")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
+    parser.add_argument("--cpus", type=int, default=1, help="Number of CPUs to sample data (default: 1).")
+    parser.add_argument("-r", "--is_raised", action="store_true", help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
     configs_path = os.environ['HOME']
@@ -146,4 +155,4 @@ if __name__ == '__main__':
         log.info('Running on user %s', user)
         log.info('Data root %s', data_root)
 
-    main(data_root, args, logger_name)
+    main(data_root, args, logger_name=logger_name)
