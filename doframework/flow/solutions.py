@@ -159,7 +159,10 @@ def generate_solution(predict_optimize, data_input: pd.DataFrame, data_name: str
 
         return None, None
 
-def main(data_root: str, args, logger_name: str=None, is_raised=False):
+def main(data_root: str, args: argparse.Namespace, **kwargs):
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = args.is_raised
 
     from doframework.core.optimizer import predict_optimize # test with built-in model
 
@@ -227,6 +230,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--regions", type=int, default=1, help="Number of feasibility regions [i.e., omegas] to generate per dataset [default: 1].")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
+    parser.add_argument("-r", "--is_raised", action="store_true", help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
     configs_path = os.environ['HOME']
@@ -254,4 +258,4 @@ if __name__ == '__main__':
         log.info('Running on user %s', user)
         log.info('Data root %s', data_root)
 
-    main(data_root, args, logger_name)
+    main(data_root, args, logger_name=logger_name)
