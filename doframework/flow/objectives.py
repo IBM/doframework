@@ -142,7 +142,7 @@ def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict
         else:
             if logger_name:
                 log = logging.getLogger(logger_name)
-                log.info('Sampling {} values for Supp(f) vertices.'.format(f_P.shape[0]))
+                log.info('Sampling {} values for Dom(f) vertices.'.format(f_P.shape[0]))
             f_V = sample_f_values(f['values']['range'],f_P.shape[0])
             omega_V = PolyLinear(f_P,f_V).evaluate(omega_P) 
         
@@ -240,7 +240,7 @@ def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict
 
     return output, generated_file
 
-def main(data_root: str, args: dict, **kwargs):
+def main(data_root: str, args: argparse.Namespace, **kwargs):
 
     with open(os.path.join(data_root,'inputs',args.input_file),'r') as file:
         meta_input = json.load(file)
