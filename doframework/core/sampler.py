@@ -173,7 +173,7 @@ def omega_sampler(f: Optional[PWL], hypothesis: rv_continuous, num_tries: int=10
             
     return np.atleast_2d(omega_samples) if omega_samples is not None else omega_samples
 
-def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
+def X_sampler(Ps: np.array, N: int, weights: list, **kwargs):
     '''
     Sample from a mixed Gaussian distribution restricted to a union of polytopes Ps. 
     Samples will be in the convex hull of the union of Ps.
@@ -201,10 +201,10 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
     lower_bound = kwargs['lower_bound'] if 'lower_bound' in kwargs else 1.0
     T = kwargs['T'] if 'T' in kwargs else 1 
     tol = kwargs['tol'] if 'tol' in kwargs else 1e-8
+    num_cpus = kwargs['num_cpus'] if 'num_cpus' in kwargs else 1 
     
     objective_id = kwargs['objective_id'] if 'objective_id' in kwargs else ''
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
-    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
     
     assert abs(sum(weights)-1)<tol, 'Weights must add up to 1.'
 
@@ -219,7 +219,13 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
     d = points.shape[-1]
     
     Xs = []
+    
     sample_slice = kwargs['sample_slice'] if 'sample_slice' in kwargs else slice(0,len(Ns))
+
+    if logger_name:
+        log = logging.getLogger(logger_name)
+        log.info(f'Sampling {N} data points for objective {objective_id} (mix time T={T}).')
+        log.info(f'rounding={is_round}, rounding threshold={round_threshold:.3f}, sigma upper_bound={upper_bound:.3f}, sigma lower_bound={lower_bound:.3f}.')
 
     for n, mean, covariance in zip(Ns[sample_slice], means[sample_slice], covariances[sample_slice]):
 
@@ -228,8 +234,7 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
         Binv = u @ np.diag(s**(-0.5))
         
         assert np.all(np.isclose(B@Binv, np.eye(d), atol=tol)), 'Root of covariance and its inverse multiply to I.'
-        assert np.all(np.isclose(covariance, (u @ np.diag(s**(0.5))) @ (np.diag(s**(0.5)) @ uT), atol=tol)), \
-        'Retrieve original covariance from SVD decomposition.'
+        assert np.all(np.isclose(covariance, (u @ np.diag(s**(0.5))) @ (np.diag(s**(0.5)) @ uT), atol=tol)), 'Retrieve original covariance from SVD decomposition.'
 
         points_init = points @ B
         mean_init = mean @ B
@@ -270,10 +275,9 @@ def X_sampler(Ps: np.array, N: int, weights: list, num_cpus: int=1, **kwargs):
         warm_sigma = kwargs['warm_sigma'] if 'warm_sigma' in kwargs else 0.1*sigma
         warm_sigma_sq = warm_sigma**2
 
-
         if logger_name:
             log = logging.getLogger(logger_name)
-            log.info(f'Produce {n} samples for policy {mean} with sigma {sigma:.3f}.')        
+            log.info(f'Producing {n} samples at policy {mean} and sigma {sigma:.3f}.')
             
         X = hit_and_run(n,mean_tmp,hull_tmp.equations,T,warm_sigma_sq,sigma_sq=sigma_sq,num_cpus=num_cpus,tol=tol)
 
@@ -299,7 +303,7 @@ def D_sampler(f: PWL, N: int, weights: list, noise: float, **kwargs):
         
     domain_scale = np.power(f.volume(),1/f.dim)
     
-    X = X_sampler(f.Ps,N,weights,upper_bound=1.2*domain_scale,lower_bound=0.2*domain_scale,**kwargs)
+    X = X_sampler(f.Ps,N,weights,upper_bound=1.2*domain_scale,lower_bound=0.1*domain_scale,**kwargs)
     y = f.evaluate(X) + norm(loc=0,scale=noise).rvs(size=X.shape[0])
     D = np.concatenate((X, y.reshape(-1,1)), 1)
     
