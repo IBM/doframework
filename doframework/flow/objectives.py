@@ -43,7 +43,7 @@ def calculate_objectives(meta_input: dict, args: dict) -> int:
     return objectives
 
 #### TODO: remove the dependence on poly to improve performance
-def get_omega_P(vertex_input: dict, poly, logger_name: Optional[str]=None,is_raised: Optional[bool]=False) -> np.array:
+def get_omega_P(vertex_input: dict, poly, logger_name: Optional[str]=None, is_raised: bool=False) -> np.array:
 
     if 'position' in vertex_input:
         points = np.atleast_2d(np.array(vertex_input['position']))
@@ -79,7 +79,7 @@ def get_omega_P(vertex_input: dict, poly, logger_name: Optional[str]=None,is_rai
             log.error('QHull failure on points: {}.'.format([list(row) for row in points]))
         if is_raised: raise e
         
-def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[str]=None, is_raised: Optional[bool]=False, **kwargs) -> Tuple[dict, str]:
+def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict, str]:
     '''
     Generate PWL objective targets from meta input.
     
@@ -95,6 +95,9 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     
     output_prefix = 'objective'
     output_suffix = 'json'
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
 
     objective_id = generate_id()
 
@@ -126,7 +129,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
         f_Ps = [f_P]
             
         omega_vertices = omega['vertices'] # in this case, omega must have 'vertices', which must have either 'position' or 'num'
-        omega_P = get_omega_P(omega_vertices,f_poly,logger_name,is_raised)
+        omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)
         omega_Ps = [omega_P]
         
         if 'coeffs' in f['values']:
@@ -156,7 +159,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
             f_poly = Polyhedron(f_P) #### TODO: remove the dependence on f_poly to improve performance
             f_Ps = [f_P]    
             omega_vertices = omega['vertices'] # omega must have vertices in this case
-            omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)        
+            omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)     
             omega_Ps = [omega_P]
             f_coeffs = f['values']['coeffs']
             f_V = np.pad(f_P,[(0,0),(0,1)],constant_values=1) @ f_coeffs
@@ -237,11 +240,14 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
 
     return output, generated_file
 
-def main(data_root: str, args: dict, logger_name: Optional[str]=None,is_raised: Optional[bool]=True):
+def main(data_root: str, args: dict, **kwargs):
 
     with open(os.path.join(data_root,'inputs',args.input_file),'r') as file:
         meta_input = json.load(file)
         meta_name = args.input_file
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = args.is_raised
 
     legit_input(meta_input,logger_name=logger_name,is_raised=is_raised)
 
@@ -267,6 +273,11 @@ def main(data_root: str, args: dict, logger_name: Optional[str]=None,is_raised: 
                 log.error('Failed to dump generated objective into json.\n')
                 log.error(e)
             if is_raised: raise e
+        except AssertionError as e:
+            if logger_name:
+                log = logging.getLogger(logger_name)
+                log.error(e)
+            if is_raised: raise e
         except Exception as e:
             if logger_name:
                 log = logging.getLogger(logger_name)
@@ -280,6 +291,7 @@ if __name__ == '__main__':
     parser.add_argument("input_file", type=str, help="Specify name of input json file from data inputs dir.")
     parser.add_argument("-o", "--objectives", type=int, default=1, help="Number of simulation objectives to produce.")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
+    parser.add_argument("-r", "--is_raised", type=bool, default=False, help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
     configs_path = os.environ['HOME']
@@ -295,17 +307,18 @@ if __name__ == '__main__':
 
     user = getpass.getuser()
     data_root = configs[user]['data']
+    
 
     now = datetime.now().strftime('%Y-%m-%d_%H%M')
     log_file = 'generanted_objective_{}.log'.format(now)
     log_path = os.path.join(data_root,'logs',log_file)
     logger_name = 'generanted_objective_log' if args.logger else None
     setup_logger(logger_name, log_path)
-
+    
     if logger_name:                
         log = logging.getLogger(logger_name)                
         log.info('Running on user %s', user)
         log.info('Data root %s', data_root)
         log.info('Parsing input file %s', args.input_file)
 
-    main(data_root, args, logger_name)
+    main(data_root, args, logger_name=logger_name)
