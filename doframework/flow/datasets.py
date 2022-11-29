@@ -83,7 +83,7 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
                 obj_name = p.name
                 if logger_name:
                     log = logging.getLogger(logger_name)
-                    log.info('Loaded {}.'.format(file.name))        
+                    log.info('Loaded objective {}.'.format(obj_name))
                 
             obj_id = obj_name # obj_input['objective_id']
             
