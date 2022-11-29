@@ -60,6 +60,7 @@ def generate_solution(predict_optimize, data_input: pd.DataFrame, data_name: str
     extra_input = ['objective']
 
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
 
     if 'is_minimum' in kwargs:    
         is_minimum = kwargs['is_minimum']
@@ -228,15 +229,15 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--configs", type=str, help="Specify the absolute path of the configs file.")
     parser.add_argument("-r", "--regions", type=int, default=1, help="Number of feasibility regions [i.e., omegas] to generate per dataset [default: 1].")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
     parser.add_argument("-r", "--is_raised", action="store_true", help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
-    configs_path = os.environ['HOME']
-    configs_file = 'configs.yaml'
+    configs_path = args.configs
 
-    with open(os.path.join(configs_path,configs_file),'r') as file:
+    with open(configs_path,'r') as file:
         try:
             configs = yaml.safe_load(file)
         except yaml.YAMLError as e:

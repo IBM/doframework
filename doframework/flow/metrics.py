@@ -198,15 +198,15 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
 if __name__ == '__main__':
         
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--configs", type=str, help="Specify the absolute path of the configs file.")
     parser.add_argument("-mc", "--mcmc", action="store_true", help="Optimize GP kernel hyperparameters with MCMC [otherwise, maximum likelihood].")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
     parser.add_argument("-r", "--is_raised", action="store_true", help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
-    configs_path = os.environ['HOME']
-    configs_file = 'configs.yaml'
+    configs_path = args.configs
 
-    with open(os.path.join(configs_path,configs_file),'r') as file:
+    with open(configs_path,'r') as file:
         try:
             configs = yaml.safe_load(file)
         except yaml.YAMLError as e:

@@ -42,6 +42,7 @@ def generate_dataset(obj_input: dict, obj_name: str, **kwargs) -> Tuple[pd.DataF
 
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
     is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
+    num_cpus = kwargs['num_cpus'] if 'num_cpus' in kwargs else 1
 
     objective_id = re.match(input_prefix+'_'+'(\w+)'+'.'+input_suffix,obj_name).group(1)
     assert objective_id == obj_input['objective_id'], 'Mismatch between file name recorded in json and file name.'
@@ -61,8 +62,7 @@ def generate_dataset(obj_input: dict, obj_name: str, **kwargs) -> Tuple[pd.DataF
     data_hypothesis_obj = getattr(scipy.stats,data_hypothesis)
 
     # D = D_sampler_legacy(f, data_hypothesis_obj, N, weights, noise, mean=policies, cov=covariances)
-    D = D_sampler(f, N, weights, noise, 
-                    mean=policies, cov=covariances, objective_id=objective_id, logger_name=logger_name, is_raised=is_raised, num_cpus=num_cpus)
+    D = D_sampler(f, N, weights, noise, mean=policies, cov=covariances, objective_id=objective_id, logger_name=logger_name, num_cpus=num_cpus)
     
     df = pd.DataFrame(D,columns=[f'x{i}' for i in range(D.shape[1]-1)]+['y'])
     generated_file = ''.join(['_'.join([output_prefix,objective_id,data_id]),'.',output_suffix])
@@ -124,16 +124,16 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--configs", type=str, help="Specify the absolute path of the configs file.")
     parser.add_argument("-s", "--datasets", type=int, default=1, help="Number of datasets to generate (default: 1).")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
-    parser.add_argument("--cpus", type=int, default=1, help="Number of CPUs to sample data (default: 1).")
     parser.add_argument("-r", "--is_raised", action="store_true", help="Raise assertions and terminate run.")
+    parser.add_argument("--cpus", type=int, default=1, help="Number of CPUs to sample data (default: 1).")
     args = parser.parse_args()
 
-    configs_path = os.environ['HOME']
-    configs_file = 'configs.yaml'
+    configs_path = args.configs
 
-    with open(os.path.join(configs_path,configs_file),'r') as file:
+    with open(configs_path,'r') as file:
         try:
             configs = yaml.safe_load(file)
         except yaml.YAMLError as e:
