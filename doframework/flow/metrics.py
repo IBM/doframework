@@ -51,11 +51,14 @@ def files_from_solution(solution_name: str) -> dict:
 
     return {'objective': f'objective_{objective_id}.json', 'data': f'data_{objective_id}_{data_id}.csv'}
 
-def generate_metric(solution_input: dict, solution_name: str, is_mcmc: bool=False, logger_name: Optional[str]=None, is_raised: Optional[bool]=False, **kwargs) -> Tuple[Optional[dict], Optional[str]]:    
+def generate_metric(solution_input: dict, solution_name: str, is_mcmc: bool=False, **kwargs) -> Tuple[Optional[dict], Optional[str]]:    
 
     output_prefix = 'metrics'
     output_suffix = 'json'
     extra_input = ['objective','data']
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
 
     if all([k in kwargs for k in extra_input]) and all([v is not None for k,v in kwargs.items() if k in extra_input]):
 
@@ -122,7 +125,11 @@ def generate_metric(solution_input: dict, solution_name: str, is_mcmc: bool=Fals
 
         return None, None
 
-def main(data_root: str, is_mcmc: bool=False, logger_name: str=None, is_raised=True):
+def main(data_root: str, args: argparse.Namespace, **kwargs):
+
+    is_mcmc = args.mcmc
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = args.is_raised
 
     for p in Path(os.path.join(data_root,'solutions')).rglob('*.json'):
         
@@ -193,6 +200,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-mc", "--mcmc", action="store_true", help="Optimize GP kernel hyperparameters with MCMC [otherwise, maximum likelihood].")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
+    parser.add_argument("-r", "--is_raised", action="store_true", help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
     configs_path = os.environ['HOME']
@@ -220,4 +228,4 @@ if __name__ == '__main__':
         log.info('Running on user %s', user)
         log.info('Data root %s', data_root)
 
-    main(data_root, args.mcmc, logger_name)
+    main(data_root, args, logger_name=logger_name)
