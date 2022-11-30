@@ -197,10 +197,11 @@ def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict
 
     pwl = PWL(f_Ps,f_Vs)
     domain_scale = np.power(pwl.volume(),1/dim) # domain "radius" parameter
+    omega_scale = omega['scale'] if 'scale' in omega else 0.0
 
     omega_hull = ConvexHull(np.vstack(omega_Ps))
     omega_locs = omega_hull.points[omega_hull.vertices,:] # may shift original vertices by order of 1e-8
-    omega_scales = np.random.rand(*omega_locs.shape)*omega['scale']*domain_scale
+    omega_scales = np.random.rand(*omega_locs.shape)*omega_scale*domain_scale
 
     output['omega']['polyhedrons'] = [[list(point) for point in P] for P in omega_Ps]
     output['omega']['hypothesis'] = omega['hypothesis'] if 'hypothesis' in omega else 'norm'
