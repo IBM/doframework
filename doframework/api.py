@@ -223,10 +223,19 @@ def _get_extra_input(input_name, process_type, configs, args, buckets):
 
 def _process(process_type, configs, args, buckets, **kwargs):
     def proc(f):
-        
-        @ray.remote(num_cpus=1) # change !!! 
-        def f_dist(*args,**kwargs):
-            return f(*args,**kwargs)
+
+        if process_type == 'data':
+            @ray.remote(num_cpus=args.data_num_cpus)
+            def f_dist(*args,**kwargs):
+                return f(*args,**kwargs)
+        elif process_type == 'solution':
+            @ray.remote(num_cpus=args.alg_num_cpus)
+            def f_dist(*args,**kwargs):
+                return f(*args,**kwargs)
+        else:
+            @ray.remote(num_cpus=1)
+            def f_dist(*args,**kwargs):
+                return f(*args,**kwargs)
 
         def inner(context, event):
             
@@ -254,11 +263,7 @@ def _process(process_type, configs, args, buckets, **kwargs):
 
                 extra = _get_extra_input(input_name, process_type, configs, args, buckets)
                 assert extra is not None, 'Extra input is None for event {}.'.format(input_name)
-                if args.logger: 
-                    if extra:
-                        print('({}) INFO ... Process working on event {} uses extra input {}.'.format(process_type,input_name,list(extra.keys())))
-                    else:
-                        print('({}) INFO ... Process working on event {} does not require extra input.'.format(process_type,input_name))
+                
                 extra = {**extra,**kwargs,**configs}
 
                 if args.distribute:
@@ -358,7 +363,7 @@ def run(generate_user_solution, configs_file, **kwargs):
         else:
             print('({}) ERROR ... generated dataset {} not published to context. Either `s3` or `local` missing from cofnigs or both feature.'.format('objective',generated_file))
 
-    @ray.remote(num_cpus=args.alg_num_cpus)
+    @ray.remote(num_cpus=1)
     @_process('data', configs, args, buckets, **kwargs)
     def generate_solutions(context, process_input, input_name, **kwargs):
         solution, generated_file = generate_user_solution(process_input, input_name, **kwargs)
