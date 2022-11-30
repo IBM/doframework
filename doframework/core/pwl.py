@@ -1,6 +1,7 @@
 import itertools
 import numpy as np
 from numpy import linalg
+from scipy.stats import gmean
 from scipy.spatial import ConvexHull
 from typing import Callable, Any, List
 from dataclasses import dataclass, field
@@ -54,7 +55,11 @@ def hyperplanePartition(H: np.array,
     
     dets = dets/scale_factor
 
-    return np.sign(np.where(np.isclose(dets,0.0,atol=tolerance),0.0,dets)*O)
+    # adjust tolerance only for orientation computation to ensure we don't get 0.
+    # when calculating orientation, each column contains a single signed volume value entry.
+    tol = max(gmean(np.abs(dets[np.nonzero(dets)])),tolerance) if O.shape[0] else tolerance 
+
+    return np.sign(np.where(np.isclose(dets,0.0,atol=tol),0.0,dets)*O)
 
 def argopt(arrs: List[np.array], key: Callable[..., Any]) -> tuple:
     '''
