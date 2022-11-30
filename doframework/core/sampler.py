@@ -278,8 +278,12 @@ def X_sampler(Ps: np.array, N: int, weights: list, **kwargs):
         if logger_name:
             log = logging.getLogger(logger_name)
             log.info(f'Producing {n} samples at policy {mean} and sigma {sigma:.3f}.')
+
+        # add epsilon to ensure sampled points are well inside 
+        hull_tmp_equations_eps = hull_tmp.equations+np.hstack([np.zeros((hull_tmp.equations.shape[0],hull_tmp.equations.shape[-1]-1)),
+                                                                        tol * np.ones(hull_tmp.equations.shape[0])[:,None]])
             
-        X = hit_and_run(n,mean_tmp,hull_tmp.equations,T,warm_sigma_sq,sigma_sq=sigma_sq,num_cpus=num_cpus,tol=tol)
+        X = hit_and_run(n,mean_tmp,hull_tmp_equations_eps,T,warm_sigma_sq,sigma_sq=sigma_sq,num_cpus=num_cpus,tol=tol)
 
         # reverse apply transformations
         X = scale_tmp*X+shift_tmp
