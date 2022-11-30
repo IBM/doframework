@@ -193,7 +193,7 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
                 opt_output, opt_file = generate_solution(predict_optimize, data_input, data_name, logger_name=logger_name, is_raised=is_raised, objective=objective)
                 
                 if (opt_output is not None) and (opt_file is not None):
-                    opt_path = os.path.join(data_root,'solutions',opt_file)
+                    opt_path = os.path.join(data_root,'solutions_dest',opt_file)
                     with open(opt_path,'w') as file:
                         json.dump(opt_output, file)                        
 

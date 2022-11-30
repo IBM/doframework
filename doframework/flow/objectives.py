@@ -262,7 +262,7 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
         try:
 
             obj_output, obj_file = generate_objective(meta_input,meta_name,logger_name=logger_name,is_raised=is_raised)
-            obj_path = os.path.join(data_root,'objectives',obj_file)
+            obj_path = os.path.join(data_root,'objectives_dest',obj_file)
 
             with open(obj_path,'w') as file:
                 json.dump(obj_output, file)

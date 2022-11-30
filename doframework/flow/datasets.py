@@ -94,7 +94,7 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
             for i in range(args.datasets):
                 
                 df, gen_data_file = generate_dataset(obj_input,obj_name,logger_name=logger_name,is_raised=is_raised,num_cpus=args.cpus)              
-                gen_data_path = os.path.join(data_root,'data',gen_data_file)
+                gen_data_path = os.path.join(data_root,'data_dest',gen_data_file)
                 df.to_csv(gen_data_path,index=False)
                 
         except IOError as e:
