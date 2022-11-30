@@ -60,7 +60,7 @@ def generate_solution(predict_optimize, data_input: pd.DataFrame, data_name: str
     extra_input = ['objective']
 
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
-    epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 1e-7
+    epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 1e-6
 
     if 'is_minimum' in kwargs:    
         is_minimum = kwargs['is_minimum']
@@ -113,7 +113,7 @@ def generate_solution(predict_optimize, data_input: pd.DataFrame, data_name: str
         # add epsilon to ensure solution inside dom(f) (dependent on optimizer feasibility sensitivity)
         constraints_eps = constraints+np.hstack([np.zeros((constraints.shape[0],constraints.shape[1]-1)),epsilon*np.ones(constraints.shape[0])[:,None]])
 
-        # remove row with nan values in data
+        # remove rows with nan values in data
         arg, val, model = predict_optimize(D[~np.isnan(D).any(axis=1)], constraints_eps, **extra)
         solution = optimalSolution(arg, val)
 
