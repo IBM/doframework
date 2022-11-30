@@ -46,7 +46,8 @@ def hyperplanePartition(H: np.array,
     n = H.shape[0]
     m = X.shape[0]
     
-    O = O if O.shape[0] else np.ones(n)
+    not_orientation = O.shape[0]
+    O = O if not_orientation else np.ones(n)
 
     SFirst = np.tile(H[:,:-1,:],(m,1,1,1))
     SLast = np.tile(np.tile(H[:,-1,:],(1,d)).reshape(n,d,d),(m,1,1,1)) 
@@ -57,7 +58,7 @@ def hyperplanePartition(H: np.array,
 
     # adjust tolerance only for orientation computation to ensure we don't get 0.
     # when calculating orientation, each column contains a single signed volume value entry.
-    tol = max(gmean(np.abs(dets[np.nonzero(dets)])),tolerance) if O.shape[0] else tolerance 
+    tol = tolerance if not_orientation else max(gmean(np.abs(dets[np.nonzero(dets)]))/10,tolerance)
 
     return np.sign(np.where(np.isclose(dets,0.0,atol=tol),0.0,dets)*O)
 
