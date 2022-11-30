@@ -41,7 +41,6 @@ def generate_dataset(obj_input: dict, obj_name: str, **kwargs) -> Tuple[pd.DataF
     output_suffix = 'csv'
 
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
-    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
     num_cpus = kwargs['num_cpus'] if 'num_cpus' in kwargs else 1
 
     objective_id = re.match(input_prefix+'_'+'(\w+)'+'.'+input_suffix,obj_name).group(1)
@@ -63,7 +62,11 @@ def generate_dataset(obj_input: dict, obj_name: str, **kwargs) -> Tuple[pd.DataF
 
     # D = D_sampler_legacy(f, data_hypothesis_obj, N, weights, noise, mean=policies, cov=covariances)
     D = D_sampler(f, N, weights, noise, mean=policies, cov=covariances, objective_id=objective_id, logger_name=logger_name, num_cpus=num_cpus)
-    
+
+    if logger_name:
+        log = logging.getLogger(logger_name)
+        log.info('Sampling dataset {} for objective {} resulted in {} NaN values.'.format(data_id,objective_id,D[np.isnan(D).any(axis=1)].shape[0]))
+
     df = pd.DataFrame(D,columns=[f'x{i}' for i in range(D.shape[1]-1)]+['y'])
     generated_file = ''.join(['_'.join([output_prefix,objective_id,data_id]),'.',output_suffix])
 
@@ -94,7 +97,7 @@ def main(data_root: str, args: argparse.Namespace, **kwargs):
             for i in range(args.datasets):
                 
                 df, gen_data_file = generate_dataset(obj_input,obj_name,logger_name=logger_name,is_raised=is_raised,num_cpus=args.cpus)              
-                gen_data_path = os.path.join(data_root,'data_dest',gen_data_file)
+                gen_data_path = os.path.join(data_root,'data-dest',gen_data_file)
                 df.to_csv(gen_data_path,index=False)
                 
         except IOError as e:
