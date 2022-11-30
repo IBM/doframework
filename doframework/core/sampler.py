@@ -224,7 +224,7 @@ def X_sampler(Ps: np.array, N: int, weights: list, **kwargs):
 
     if logger_name:
         log = logging.getLogger(logger_name)
-        log.info(f'Sampling {N} data points for objective {objective_id} (mix time T={T}).')
+        log.info(f'Sampling {N} data points for objective {objective_id} (mix time T={T}) with {num_cpus} cpus.')
         log.info(f'rounding={is_round}, rounding threshold={round_threshold:.3f}, sigma upper_bound={upper_bound:.3f}, sigma lower_bound={lower_bound:.3f}.')
 
     for n, mean, covariance in zip(Ns[sample_slice], means[sample_slice], covariances[sample_slice]):
