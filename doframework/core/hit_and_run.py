@@ -17,7 +17,8 @@
 from itertools import islice, combinations
 from typing import Optional
 from functools import partial
-from multiprocess import Pool
+# from multiprocess import Pool
+from ray.util.multiprocessing import Pool
 
 import numpy as np
 import numpy.linalg as la
