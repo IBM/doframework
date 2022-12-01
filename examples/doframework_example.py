@@ -29,4 +29,4 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--configs", type=str, help="User configs.yaml.")
     args = parser.parse_args()
     
-    dof.run(predict_optimize_resolved, args.configs, objectives=2, datasets=2)
+    dof.run(predict_optimize_resolved, args.configs, objectives=3, datasets=3, data_num_cpus=2)

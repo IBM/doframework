@@ -43,7 +43,7 @@ def calculate_objectives(meta_input: dict, args: dict) -> int:
     return objectives
 
 #### TODO: remove the dependence on poly to improve performance
-def get_omega_P(vertex_input: dict, poly, logger_name: Optional[str]=None,is_raised: Optional[bool]=False) -> np.array:
+def get_omega_P(vertex_input: dict, poly, logger_name: Optional[str]=None, is_raised: bool=False) -> np.array:
 
     if 'position' in vertex_input:
         points = np.atleast_2d(np.array(vertex_input['position']))
@@ -79,7 +79,7 @@ def get_omega_P(vertex_input: dict, poly, logger_name: Optional[str]=None,is_rai
             log.error('QHull failure on points: {}.'.format([list(row) for row in points]))
         if is_raised: raise e
         
-def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[str]=None, is_raised: Optional[bool]=False, **kwargs) -> Tuple[dict, str]:
+def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict, str]:
     '''
     Generate PWL objective targets from meta input.
     
@@ -95,6 +95,9 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     
     output_prefix = 'objective'
     output_suffix = 'json'
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
 
     objective_id = generate_id()
 
@@ -116,7 +119,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     if 'position' in f['vertices']:
         
         f_points = np.atleast_2d(np.array(f['vertices']['position']))
-        f_supp_range = np.array([[f_points[:,i].min(),f_points[:,i].max()] for i in range(dim)])
+        f_domain_range = np.array([[f_points[:,i].min(),f_points[:,i].max()] for i in range(dim)])
         f_hull = ConvexHull(f_points,qhull_options='QJ')
         f_P = f_hull.points[f_hull.vertices,:]
         if logger_name:
@@ -126,7 +129,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
         f_Ps = [f_P]
             
         omega_vertices = omega['vertices'] # in this case, omega must have 'vertices', which must have either 'position' or 'num'
-        omega_P = get_omega_P(omega_vertices,f_poly,logger_name,is_raised)
+        omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)
         omega_Ps = [omega_P]
         
         if 'coeffs' in f['values']:
@@ -139,7 +142,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
         else:
             if logger_name:
                 log = logging.getLogger(logger_name)
-                log.info('Sampling {} values for Supp(f) vertices.'.format(f_P.shape[0]))
+                log.info('Sampling {} values for Dom(f) vertices.'.format(f_P.shape[0]))
             f_V = sample_f_values(f['values']['range'],f_P.shape[0])
             omega_V = PolyLinear(f_P,f_V).evaluate(omega_P) 
         
@@ -148,7 +151,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
                 
     else:
 
-        f_supp_range = np.atleast_2d(np.array(f['vertices']['range']))
+        f_domain_range = np.atleast_2d(np.array(f['vertices']['range']))
         f_P = np.vstack(list(map(np.array, it.product(*f['vertices']['range']))))        
         
         if 'coeffs' in f['values']:
@@ -156,7 +159,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
             f_poly = Polyhedron(f_P) #### TODO: remove the dependence on f_poly to improve performance
             f_Ps = [f_P]    
             omega_vertices = omega['vertices'] # omega must have vertices in this case
-            omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)        
+            omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)     
             omega_Ps = [omega_P]
             f_coeffs = f['values']['coeffs']
             f_V = np.pad(f_P,[(0,0),(0,1)],constant_values=1) @ f_coeffs
@@ -183,7 +186,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
             p_process = Process(uniform(scale=p))
             q_process = Process(uniform(scale=q))
 
-            f_supp, omega_supp = triangulation(f_supp_range, f_range, ratio, vertex_num, dim, p_process, q_process, regularization_min_prob, logger_name=logger_name, is_raised=is_raised)            
+            f_supp, omega_supp = triangulation(f_domain_range, f_range, ratio, vertex_num, dim, p_process, q_process, regularization_min_prob, logger_name=logger_name, is_raised=is_raised)            
             f_Ps = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(f_supp)])
             f_Vs = flatten([[leaf.poly.values for leaf in tree.leaves()] for tree in flatten(f_supp)])
             omega_Ps = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(omega_supp)])
@@ -193,11 +196,12 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     output['f']['values'] = [list(V) for V in f_Vs]
 
     pwl = PWL(f_Ps,f_Vs)
-    f_supp_scale = np.power(pwl.volume(),1/dim) # width parameter, approx of f domain diameter 
+    domain_scale = np.power(pwl.volume(),1/dim) # domain "radius" parameter
+    omega_scale = omega['scale'] if 'scale' in omega else 0.0
 
     omega_hull = ConvexHull(np.vstack(omega_Ps))
-    omega_locs = omega_hull.points[omega_hull.vertices,:] # this may shift original vertices on the order of 1e-8
-    omega_scales = np.random.rand(*omega_locs.shape)*omega['scale']*f_supp_scale
+    omega_locs = omega_hull.points[omega_hull.vertices,:] # may shift original vertices by order of 1e-8
+    omega_scales = np.random.rand(*omega_locs.shape)*omega_scale*domain_scale
 
     output['omega']['polyhedrons'] = [[list(point) for point in P] for P in omega_Ps]
     output['omega']['hypothesis'] = omega['hypothesis'] if 'hypothesis' in omega else 'norm'
@@ -207,7 +211,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     policies = pwl.sample(data['policy_num'])
     eigenvals = np.vstack([sample_standard_simplex(dim)*dim for _ in range(data['policy_num'])])
     corrs = [random_correlation.rvs(e) for e in eigenvals]
-    sigmas = [np.random.rand(dim)*data['scale']*f_supp_scale for _ in range(data['policy_num'])]
+    sigmas = [np.random.rand(dim)*data['scale']*domain_scale for _ in range(data['policy_num'])]
     covs = [np.diag(sigma) @ corr @ np.diag(sigma) for corr, sigma in zip(corrs,sigmas)]
     weights = sample_standard_simplex(data['policy_num'])
 
@@ -217,6 +221,7 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
     output['data']['covariances'] = [[list(row) for row in cov] for cov in covs]
     output['data']['weights'] = list(weights)
     output['data']['noise'] = data['noise']*(np.array(f_Vs).max()-np.array(f_Vs).min())
+    output['data']['scale'] = data['scale']
 
     opt_fns = {'min': np.nanargmin, 'max': np.nanargmax}
     for opt in ['min','max']:    
@@ -236,11 +241,14 @@ def generate_objective(meta_input: dict, meta_name: str, logger_name: Optional[s
 
     return output, generated_file
 
-def main(data_root: str, args: dict, logger_name: Optional[str]=None,is_raised: Optional[bool]=True):
+def main(data_root: str, args: argparse.Namespace, **kwargs):
 
     with open(os.path.join(data_root,'inputs',args.input_file),'r') as file:
         meta_input = json.load(file)
         meta_name = args.input_file
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = args.is_raised
 
     legit_input(meta_input,logger_name=logger_name,is_raised=is_raised)
 
@@ -255,7 +263,7 @@ def main(data_root: str, args: dict, logger_name: Optional[str]=None,is_raised: 
         try:
 
             obj_output, obj_file = generate_objective(meta_input,meta_name,logger_name=logger_name,is_raised=is_raised)
-            obj_path = os.path.join(data_root,'objectives',obj_file)
+            obj_path = os.path.join(data_root,'objectives-dest',obj_file)
 
             with open(obj_path,'w') as file:
                 json.dump(obj_output, file)
@@ -264,6 +272,11 @@ def main(data_root: str, args: dict, logger_name: Optional[str]=None,is_raised: 
             if logger_name:
                 log = logging.getLogger(logger_name)
                 log.error('Failed to dump generated objective into json.\n')
+                log.error(e)
+            if is_raised: raise e
+        except AssertionError as e:
+            if logger_name:
+                log = logging.getLogger(logger_name)
                 log.error(e)
             if is_raised: raise e
         except Exception as e:
@@ -277,14 +290,15 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", type=str, help="Specify name of input json file from data inputs dir.")
+    parser.add_argument("-c", "--configs", type=str, help="Specify the absolute path of the configs file.")
     parser.add_argument("-o", "--objectives", type=int, default=1, help="Number of simulation objectives to produce.")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
+    parser.add_argument("-r", "--is_raised", type=bool, default=False, help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
-    configs_path = os.environ['HOME']
-    configs_file = 'configs.yaml'
+    configs_path = args.configs
 
-    with open(os.path.join(configs_path,configs_file),'r') as file:
+    with open(configs_path,'r') as file:
         try:
             configs = yaml.safe_load(file)
         except yaml.YAMLError as e:
@@ -294,17 +308,18 @@ if __name__ == '__main__':
 
     user = getpass.getuser()
     data_root = configs[user]['data']
+    
 
     now = datetime.now().strftime('%Y-%m-%d_%H%M')
     log_file = 'generanted_objective_{}.log'.format(now)
     log_path = os.path.join(data_root,'logs',log_file)
     logger_name = 'generanted_objective_log' if args.logger else None
     setup_logger(logger_name, log_path)
-
+    
     if logger_name:                
         log = logging.getLogger(logger_name)                
         log.info('Running on user %s', user)
         log.info('Data root %s', data_root)
         log.info('Parsing input file %s', args.input_file)
 
-    main(data_root, args, logger_name)
+    main(data_root, args, logger_name=logger_name)

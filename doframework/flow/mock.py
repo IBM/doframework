@@ -71,7 +71,7 @@ def generate_objective_mock(meta_input: dict, meta_name: str, **kwargs) -> Tuple
 
 def generate_dataset_mock(obj_input: dict, obj_name: str, **kwargs) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     '''
-    generate_dataset test for end-to-end integration.
+    generate_dataset test for end-to-end integration. The mock dataset will be sampled for the function (x**2 + y**2)*np.sin(np.pi*x*y/16).
     
             Parameters:
                     obj_input (dict): Objective target dictionary. 
@@ -144,7 +144,8 @@ def generate_dataset_mock(obj_input: dict, obj_name: str, **kwargs) -> Tuple[Opt
 
 def generate_solution_mock(predict_optimize, data_input: pd.DataFrame, data_name: str, **kwargs) -> Tuple[Optional[dict], Optional[str]]:
     '''
-    generate_solution test for end-to-end integration.
+    generate_solution test for end-to-end integration. The solutions will be generated for the test function (x**2 + y**2)*np.sin(np.pi*x*y/16).
+    The optimization will be constrained to -2 =< x,y <= 2. The solutions produced will be on the vertices [+-2, +-2].
     
             Parameters:
                     predict_optimize: Predit-then-optimize algorithm.

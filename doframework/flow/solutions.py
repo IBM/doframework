@@ -60,6 +60,7 @@ def generate_solution(predict_optimize, data_input: pd.DataFrame, data_name: str
     extra_input = ['objective']
 
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 1e-6
 
     if 'is_minimum' in kwargs:    
         is_minimum = kwargs['is_minimum']
@@ -106,10 +107,14 @@ def generate_solution(predict_optimize, data_input: pd.DataFrame, data_name: str
 
         output['omega'] = {}
         output['omega']['vertices'] = [list(v) for v in omega_approx_hull_vertices]
-        constraints = np.unique(omega_approx_hull.equations,axis=0)
+        constraints = np.unique(omega_approx_hull.equations,axis=0) # shifts vertices by 1e-7 to 1e-8 error
         output['omega']['constraints'] = [list(c) for c in constraints]
 
-        arg, val, model = predict_optimize(D, constraints, **extra)
+        # add epsilon to ensure solution inside dom(f) (dependent on optimizer feasibility sensitivity)
+        constraints_eps = constraints+np.hstack([np.zeros((constraints.shape[0],constraints.shape[1]-1)),epsilon*np.ones(constraints.shape[0])[:,None]])
+
+        # remove rows with nan values in data
+        arg, val, model = predict_optimize(D[~np.isnan(D).any(axis=1)], constraints_eps, **extra)
         solution = optimalSolution(arg, val)
 
         if logger_name:
@@ -159,7 +164,10 @@ def generate_solution(predict_optimize, data_input: pd.DataFrame, data_name: str
 
         return None, None
 
-def main(data_root: str, args, logger_name: str=None, is_raised=False):
+def main(data_root: str, args: argparse.Namespace, **kwargs):
+
+    logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
+    is_raised = args.is_raised
 
     from doframework.core.optimizer import predict_optimize # test with built-in model
 
@@ -189,7 +197,7 @@ def main(data_root: str, args, logger_name: str=None, is_raised=False):
                 opt_output, opt_file = generate_solution(predict_optimize, data_input, data_name, logger_name=logger_name, is_raised=is_raised, objective=objective)
                 
                 if (opt_output is not None) and (opt_file is not None):
-                    opt_path = os.path.join(data_root,'solutions',opt_file)
+                    opt_path = os.path.join(data_root,'solutions-dest',opt_file)
                     with open(opt_path,'w') as file:
                         json.dump(opt_output, file)                        
 
@@ -225,14 +233,15 @@ def main(data_root: str, args, logger_name: str=None, is_raised=False):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--configs", type=str, help="Specify the absolute path of the configs file.")
     parser.add_argument("-r", "--regions", type=int, default=1, help="Number of feasibility regions [i.e., omegas] to generate per dataset [default: 1].")
     parser.add_argument("-l", "--logger", action="store_true", help="Enable logging.")
+    parser.add_argument("-r", "--is_raised", action="store_true", help="Raise assertions and terminate run.")
     args = parser.parse_args()
 
-    configs_path = os.environ['HOME']
-    configs_file = 'configs.yaml'
+    configs_path = args.configs
 
-    with open(os.path.join(configs_path,configs_file),'r') as file:
+    with open(configs_path,'r') as file:
         try:
             configs = yaml.safe_load(file)
         except yaml.YAMLError as e:
@@ -254,4 +263,4 @@ if __name__ == '__main__':
         log.info('Running on user %s', user)
         log.info('Data root %s', data_root)
 
-    main(data_root, args, logger_name)
+    main(data_root, args, logger_name=logger_name)
