@@ -18,8 +18,8 @@ install_requires = [
     'numpy',
     'pandas',
     'matplotlib',
-    'ray[default,serve,k8s]>=1.4.1',
-    'rayvens>=0.6.0',
+    'ray[default,serve,k8s]>=1.13.0',
+    'rayvens>=0.7.0',
     'ibm-cos-sdk>=2.10.0',
     'boto3>=1.17.110',
     'aiohttp>=3.7.4',
@@ -31,8 +31,8 @@ install_requires = [
 ]
 
 setup(name='doframework',
-version='0.1.4',
-description='A testing framework for optimization model learning algorithms.',
+version='0.2.0',
+description='A testing framework for decision optimization model learning algorithms.',
 long_description_content_type="text/markdown",
 long_description=open('README.md').read(),
 author='Orit Davidovich',
@@ -48,6 +48,6 @@ classifiers=[
 packages=find_packages(include=['doframework', 'doframework.core', 'doframework.flow']),
 install_requires=install_requires,
 scripts=['doframework-setup.sh'],
-package_data={'doframework': ['notebooks/*.ipynb', 'inputs/*.json', 'outputs/*.json', 'outputs/*.csv', 'examples/*.py']},
+package_data={'doframework': ['notebooks/*.ipynb', 'inputs/*.json', 'outputs/*.json', 'outputs/*.csv', 'examples/*.py', 'configs/*.yaml']},
 python_requires='>=3.8'
 )
