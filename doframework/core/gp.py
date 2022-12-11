@@ -129,7 +129,7 @@ def gp_model(X: np.array,
             mean = quad(lambda x: x * kde.pdf(x), a=-np.inf, b=np.inf)[0]
             var = quad(lambda x: x**2 * kde.pdf(x), a=-np.inf, b=np.inf)[0] - mean**2
             lengthscales[i] = np.sqrt(var)
-            model.kern.lengthscale[[i]].set_prior(GPy.priors.Gamma.from_EV(lengthscales[i],lengthscales[i]/2),warning=False) # data variance as length scale
+            model.kern.lengthscale[[i]].set_prior(GPy.priors.Gamma.from_EV(lengthscales[i],lengthscales[i]/2),warning=False)
 
         hmc = GPy.inference.mcmc.HMC(model)
         samples = hmc.sample(num_samples=num_samples,hmc_iters=hmc_iters)
@@ -149,7 +149,7 @@ def gp_model(X: np.array,
             model.rbf.variance = modals[0]/factor**2
             model.Gaussian_noise.variance = modals[dim-1]/factor**2
         else:
-            model = None
+            raise ValueError('HMC failed. Possible unsuitable priors on kernels parameters leading to repetative samples.')
 
         for i in range(dim):
             if i in modals:
