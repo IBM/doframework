@@ -322,9 +322,9 @@ def run(generate_user_solution, configs_file, **kwargs):
     args = Args(objectives, datasets, feasibility_regions, run_mode, distribute, mcmc, logger, mock, after_idle_for, rayvens_logs, alg_num_cpus, data_num_cpus)
 
     if args.run_mode == 'operator':
-        ray.init(address='auto')
+        ray.init(address='auto',ignore_reinit_error=True)
     else:
-        ray.init()
+        ray.init(ignore_reinit_error=True)
     rayvens.init(mode=args.run_mode ,release=(not args.rayvens_logs))
 
     if args.logger: print('({}) INFO ... Running simulation with args objectives={o} datasets={s} feasibility_regions={r} distribute={d} run_mode={m} logger={l}'.format('root', 

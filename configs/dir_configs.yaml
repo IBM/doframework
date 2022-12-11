@@ -1,0 +1,10 @@
+local:
+  buckets: 
+    inputs: ''
+    inputs_dest: ''
+    objectives: ''
+    objectives_dest: ''
+    data: ''
+    data_dest: ''
+    solutions: ''
+    solutions_dest: ''

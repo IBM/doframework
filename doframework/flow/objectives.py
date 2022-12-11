@@ -28,10 +28,10 @@ from scipy.stats import random_correlation, uniform, beta
 from scipy.spatial import ConvexHull
 
 from doframework.core.inputs import setup_logger, legit_input, parse_dim, parse_vertex_num, generate_id
-from doframework.core.triangulation import Process, triangulation, pts_iterator
-from doframework.core.utils import flatten, sample_standard_simplex
-from doframework.core.pwl import PWL, Polyhedron, PolyLinear, argopt
-from doframework.core.sampler import sample_f_values
+from doframework.core.triangulation import Process, triangulation, box_iterator
+from doframework.core.utils import flatten, sample_standard_simplex, value_match, incidence
+from doframework.core.pwl import PWL, Polyhedron, argopt
+from doframework.core.hit_and_run import get_hull, in_domain, scale, hit_and_run
 
 def calculate_objectives(meta_input: dict, args: dict) -> int:
     f = meta_input['f']
@@ -41,43 +41,6 @@ def calculate_objectives(meta_input: dict, args: dict) -> int:
                     ('position' in omega['vertices']) and \
                     (('evals' in f['values']) or ('coeffs' in f['values'])) else args.objectives
     return objectives
-
-#### TODO: remove the dependence on poly to improve performance
-def get_omega_P(vertex_input: dict, poly, logger_name: Optional[str]=None, is_raised: bool=False) -> np.array:
-
-    if 'position' in vertex_input:
-        points = np.atleast_2d(np.array(vertex_input['position']))
-        points = points[poly.isin(points)]
-        if logger_name:
-            log = logging.getLogger(logger_name)
-            log.info('Extracted Omega vertices from input. Points out of Supp(f) were removed.\n{}.'.format([list(row) for row in points]))
-    else:
-        vertex_num = vertex_input['num']
-        if 'range' in vertex_input:
-            if logger_name:
-                log = logging.getLogger(logger_name)
-                log.info('Sampling {} vertices for Omega within given range.'.format(vertex_num))
-            vertex_range_points = np.vstack(list(map(np.array, it.product(*vertex_input['range']))))
-            points = np.vstack(
-                list(it.islice(
-                    filter(lambda point: Polyhedron(vertex_range_points).isin(point)[0],
-                           pts_iterator(poly,1))
-                    ,vertex_num
-                ))                
-            )
-        else:
-            if logger_name:
-                log = logging.getLogger(logger_name)
-                log.info('Sampling {} vertices for Omega within Supp(f).'.format(vertex_num))
-            points = poly.sample(vertex_num)
-    try:
-        hull = ConvexHull(points,qhull_options='QJ')
-        return hull.points[hull.vertices,:]
-    except Exception as e:
-        if logger_name:
-            log = logging.getLogger(logger_name)
-            log.error('QHull failure on points: {}.'.format([list(row) for row in points]))
-        if is_raised: raise e
         
 def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict, str]:
     '''
@@ -97,7 +60,7 @@ def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict
     output_suffix = 'json'
 
     logger_name = kwargs['logger_name'] if 'logger_name' in kwargs else None
-    is_raised = kwargs['is_raised'] if 'is_raised' in kwargs else False
+    tol = kwargs['tol'] if 'tol' in kwargs else 1e-8
 
     objective_id = generate_id()
 
@@ -116,94 +79,170 @@ def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict
         log = logging.getLogger(logger_name)
         log.info('Started output for objective ID {}.'.format(objective_id))
 
+    f_vertex_num = parse_vertex_num(meta_input)
+    fpoints, opoints = np.array([]), np.array([])
+
+    assert f_vertex_num > 0, 'Vertex number for PWL function f not specified. Provide f[\"vertices\"][\"num\"].'
+
     if 'position' in f['vertices']:
         
-        f_points = np.atleast_2d(np.array(f['vertices']['position']))
-        f_domain_range = np.array([[f_points[:,i].min(),f_points[:,i].max()] for i in range(dim)])
-        f_hull = ConvexHull(f_points,qhull_options='QJ')
-        f_P = f_hull.points[f_hull.vertices,:]
-        if logger_name:
-            log = logging.getLogger(logger_name)
-            log.info('Extracted Supp(f) vertices from input.')
-        f_poly = Polyhedron(f_P) #### TODO: remove the dependence on f_poly to improve performance
-        f_Ps = [f_P]
-            
-        omega_vertices = omega['vertices'] # in this case, omega must have 'vertices', which must have either 'position' or 'num'
-        omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)
-        omega_Ps = [omega_P]
+        fpoints = np.atleast_2d(np.array(f['vertices']['position']))
+        fhull, fvertices, fsimplices = get_hull(fpoints)
         
-        if 'coeffs' in f['values']:
-            f_coeffs = f['values']['coeffs']
-            f_V = np.pad(f_P,[(0,0),(0,1)],constant_values=1) @ f_coeffs
-            omega_V = np.pad(omega_P,[(0,0),(0,1)],constant_values=1) @ f_coeffs        
-        elif 'evals' in f['values']:
-            f_V = np.array(f['values']['evals'])[f_hull.vertices]
-            omega_V = PolyLinear(f_P,f_V).evaluate(omega_P)        
-        else:
-            if logger_name:
-                log = logging.getLogger(logger_name)
-                log.info('Sampling {} values for Dom(f) vertices.'.format(f_P.shape[0]))
-            f_V = sample_f_values(f['values']['range'],f_P.shape[0])
-            omega_V = PolyLinear(f_P,f_V).evaluate(omega_P) 
+        assert 'vertices' in omega,\
+        'When specifying \"position\" for f vertices, omega vertices must also be specified. You can either add \"num\" and \"range\" fields under omega[\"vertices\"] for num vertices to be sampled within range or choose to specify omega vertices directly in \"position\" field under omega[\"vertices\"].'
         
-        f_Vs = [f_V]
-        omega_Vs = [omega_V]
-                
     else:
-
+        
+        assert 'range' in f['vertices'], 'f[\"vertices\"] is missing \"range\" field to sample from.'
+        
         f_domain_range = np.atleast_2d(np.array(f['vertices']['range']))
-        f_P = np.vstack(list(map(np.array, it.product(*f['vertices']['range']))))        
+        f_domain_vertices = np.vstack(list(map(np.array, it.product(*f['vertices']['range']))))
+        fhull, fvertices, fsimplices = get_hull(f_domain_vertices)
+        
+
+    if 'vertices' in omega:
+        
+        if 'position' in omega['vertices']:
+        
+            opoints = np.atleast_2d(np.array(omega['vertices']['position']))
+            opoints = opoints[in_domain(opoints, fhull.equations, tol=tol)]
+            if fpoints.size == 0:
+                fpoints = f_domain_vertices
+            
+        else:
+            
+            assert 'num' in omega['vertices'], 'omega[\"vertices\"] is missing \"num\" field for number of omega points sampled.'
+            
+            omega_vertex_num = omega['vertices']['num']
+            
+            if 'range' in omega['vertices']:
+                
+                if fpoints.size == 0:
+                    
+                    fpoints = f_domain_vertices
+                    
+                opoints = np.vstack(
+                    list(
+                        it.islice(
+                            filter(lambda point: in_domain(np.atleast_2d(point), fhull.equations, tol=tol)[0],
+                                box_iterator(omega['vertices']['range'],1)),
+                            omega_vertex_num)
+                    )
+                )
+                
+            else:
+                
+                if fpoints.size > 0:
+            
+                    cm = np.average(fvertices,axis=0)[None,:]
+                    ratio = scale(cm, fsimplices[:,0,:], fhull.equations[:,:-1])
+
+                    tmp_points = (fpoints-cm)/ratio 
+                    tmp_hull, tmp_vertices, tmp_simplices = get_hull(tmp_points)
+                    origin = np.average(tmp_vertices,axis=0)[None,:]
+
+                    tmp_opoints = hit_and_run(omega_vertex_num,origin,tmp_hull.equations,T=1,delta=0.1,num_cpus=1,tol=tol)
+                    opoints = tmp_opoints*ratio+cm
+                    
+    else:
+        
+        if fpoints.size>0 and omega['ratio']>=1:
+            opoints = fpoints
+
+    if fpoints.size>0 and opoints.size>0:    
         
         if 'coeffs' in f['values']:
+        
+            fcoeffs = f['values']['coeffs']
+            fvals = np.pad(fpoints,[(0,0),(0,1)],constant_values=1) @ fcoeffs
+            ovals = np.pad(opoints,[(0,0),(0,1)],constant_values=1) @ fcoeffs
 
-            f_poly = Polyhedron(f_P) #### TODO: remove the dependence on f_poly to improve performance
-            f_Ps = [f_P]    
-            omega_vertices = omega['vertices'] # omega must have vertices in this case
-            omega_P = get_omega_P(omega_vertices,f_poly,logger_name=logger_name,is_raised=is_raised)     
-            omega_Ps = [omega_P]
-            f_coeffs = f['values']['coeffs']
-            f_V = np.pad(f_P,[(0,0),(0,1)],constant_values=1) @ f_coeffs
-            omega_V = np.pad(omega_P,[(0,0),(0,1)],constant_values=1) @ f_coeffs                
-            f_Vs = [f_V]
-            omega_Vs = [omega_V]
+        else:    
 
-        else:
+            if 'evals' in f['values']:
 
-            ratio = omega['ratio']
-            f_range = f['values']['range']
-            vertex_num = parse_vertex_num(meta_input)    
-            if logger_name:
-                log = logging.getLogger(logger_name)
-                log.info('Running triangulation algorithm: N={}, ratio={}.'.format(vertex_num,ratio))
+                assert 'position' in f['vertices'], \
+                'There must be a \"positions\" field in f[\"vertices\"], when \"evals\" field is specified in f[\"values\"].'
+                assert len(f['values']['evals']) == len(f['vertices']['position']),\
+                'The length of teh values list under f[\"values\"][\"evals\"] should match the number of \"positions\" in f[\"vertices\"].'
 
-            p = kwargs['p'] if 'p' in kwargs else 0.5
-            q = kwargs['q'] if 'q' in kwargs else 1
+                fvals = np.array(f['values']['evals'])
+                f_value_range = [fvals.min(),fvals.max()]
+                ovals = value_match(fpoints,opoints,fvals,f_value_range)
+
+            else:
+
+                assert 'range' in f['values'], \
+                'There must be a \"range\" field in f[\"values\"], when neither \"evals\" nor \"coeffs\" are specified.'
+
+                f_value_range = f['values']['range'] 
+                fvals = uniform.rvs(f_value_range[0],f_value_range[1]-f_value_range[0],fpoints.shape[0])
+                ovals = uniform.rvs(f_value_range[0],f_value_range[1]-f_value_range[0],opoints.shape[0])
+
+        m = fpoints.min()
+        M = fpoints.max()
+
+        olift = np.hstack([opoints,(np.random.rand(opoints.shape[0])*(M-m)+m)[:,None]])
+        flift = np.hstack([fpoints,(np.random.rand(fpoints.shape[0])*(M-m)+11*(M-m)+m)[:,None]]) # fpoints far above opoints to get hull of opoints in triangulation
+
+        P = np.vstack([opoints,fpoints])
+        _, unique_indices = np.unique(P, axis=0, return_index=True) # first unique occurance in omega
+        Plift = np.vstack([olift,flift])[unique_indices]
+
+        view_point = np.concatenate([P.mean(axis=0),np.array([m-1000*(M-m)])]) # view point far below to catch full lower envelope
+        envelope = ConvexHull(np.vstack([np.atleast_2d(view_point),Plift]),qhull_options='QG0')
+        good_indices = envelope.simplices[envelope.good]
+        fPs = envelope.points[good_indices,:][:,:,:-1]
+
+        V = np.concatenate([ovals,fvals])[unique_indices]
+        fVs = V[:,None][good_indices-1].reshape(*good_indices.shape) # view point at index 0
+
+        oin = [np.all(incidence(opoints,fp).any(axis=0)) for fp in fPs]
+        oPs = fPs[oin]
+        oVs = fVs[oin]
+        
+        if oPs.size == 0: # when fail to catch omega lower envelope
+            oPs, oVs = fPs, fVs
             
-            # default prob: use upper bound on number of simplices vertex_num-dim
-            regularization_min_prob_default = beta(1,vertex_num-dim-1).cdf(1/(vertex_num-dim) - beta(1,vertex_num-dim-1).std())
-            regularization_min_prob = kwargs['regularization_min_prob'] if 'regularization_min_prob' in kwargs else regularization_min_prob_default
+    else:
+        
+        assert 'ratio' in omega, 'field ratio is missing under omega.'
+        assert 'range' in f['values'], 'field \"range\"" (for range of function values) is missing under f[\"values\"].'
+        
+        ratio = omega['ratio']
+        f_value_range = f['values']['range']
+        f_vertex_num = parse_vertex_num(meta_input)
 
-            p_process = Process(uniform(scale=p))
-            q_process = Process(uniform(scale=q))
+        p = kwargs['p'] if 'p' in kwargs else 0.5
+        q = kwargs['q'] if 'q' in kwargs else 1
 
-            f_supp, omega_supp = triangulation(f_domain_range, f_range, ratio, vertex_num, dim, p_process, q_process, regularization_min_prob, logger_name=logger_name, is_raised=is_raised)            
-            f_Ps = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(f_supp)])
-            f_Vs = flatten([[leaf.poly.values for leaf in tree.leaves()] for tree in flatten(f_supp)])
-            omega_Ps = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(omega_supp)])
-            omega_Vs = flatten([[leaf.poly.values for leaf in tree.leaves()] for tree in flatten(omega_supp)])  
+        # default prob: use upper bound on number of simplices f_vertex_num-dim
+        regularization_min_prob_default = beta(1,f_vertex_num-dim-1).cdf(1/(f_vertex_num-dim) - beta(1,f_vertex_num-dim-1).std())
+        regularization_min_prob = kwargs['regularization_min_prob'] if 'regularization_min_prob' in kwargs else regularization_min_prob_default
 
-    output['f']['polyhedrons'] = [[list(point) for point in P] for P in f_Ps]
-    output['f']['values'] = [list(V) for V in f_Vs]
+        p_process = Process(uniform(scale=p))
+        q_process = Process(uniform(scale=q))
 
-    pwl = PWL(f_Ps,f_Vs)
+        f_supp, omega_supp = triangulation(f_domain_range, f_value_range, ratio, f_vertex_num, dim, p_process, q_process, regularization_min_prob)            
+        fPs = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(f_supp)])
+        fVs = flatten([[leaf.poly.values for leaf in tree.leaves()] for tree in flatten(f_supp)])
+        oPs = flatten([[leaf.poly.points for leaf in tree.leaves()] for tree in flatten(omega_supp)])
+        oVs = flatten([[leaf.poly.values for leaf in tree.leaves()] for tree in flatten(omega_supp)])  
+  
+
+    output['f']['polyhedrons'] = [[list(point) for point in P] for P in fPs]
+    output['f']['values'] = [list(V) for V in fVs]
+
+    pwl = PWL(fPs,fVs)
     domain_scale = np.power(pwl.volume(),1/dim) # domain "radius" parameter
     omega_scale = omega['scale'] if 'scale' in omega else 0.0
 
-    omega_hull = ConvexHull(np.vstack(omega_Ps))
+    omega_hull = ConvexHull(np.vstack(oPs))
     omega_locs = omega_hull.points[omega_hull.vertices,:] # may shift original vertices by order of 1e-8
     omega_scales = np.random.rand(*omega_locs.shape)*omega_scale*domain_scale
 
-    output['omega']['polyhedrons'] = [[list(point) for point in P] for P in omega_Ps]
+    output['omega']['polyhedrons'] = [[list(point) for point in P] for P in oPs]
     output['omega']['hypothesis'] = omega['hypothesis'] if 'hypothesis' in omega else 'norm'
     output['omega']['locs'] = [list(row) for row in omega_locs]
     output['omega']['scales'] = [list(row) for row in omega_scales]
@@ -220,15 +259,15 @@ def generate_objective(meta_input: dict, meta_name: str, **kwargs) -> Tuple[dict
     output['data']['policies'] = [list(row) for row in policies]
     output['data']['covariances'] = [[list(row) for row in cov] for cov in covs]
     output['data']['weights'] = list(weights)
-    output['data']['noise'] = data['noise']*(np.array(f_Vs).max()-np.array(f_Vs).min())
+    output['data']['noise'] = data['noise']*(np.array(fVs).max()-np.array(fVs).min())
     output['data']['scale'] = data['scale']
 
     opt_fns = {'min': np.nanargmin, 'max': np.nanargmax}
     for opt in ['min','max']:    
         output['optimum'][opt] = {}
-        argind = argopt(omega_Vs,opt_fns[opt])
-        output['optimum'][opt]['arg'] = list(omega_Ps[argind[0]][argind[1]])
-        output['optimum'][opt]['value'] = omega_Vs[argind[0]][argind[1]]
+        argind = argopt(oVs,opt_fns[opt])
+        output['optimum'][opt]['arg'] = list(oPs[argind[0]][argind[1]])
+        output['optimum'][opt]['value'] = oVs[argind[0]][argind[1]]
 
     output['input_file_name'] = meta_name # meta_input['input_file_name'] 
     output['objective_id'] = objective_id

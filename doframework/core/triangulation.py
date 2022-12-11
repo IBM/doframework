@@ -629,7 +629,7 @@ def pts_iterator(P: Union[Polyhedron,PolyLinear], N: int=1):
 
 def box_iterator(R,N):
     while True:
-        yield np.array([uniform.rvs(*r,N) for r in R]).T
+        yield np.array([uniform.rvs(r[0],r[1]-r[0],N) for r in R]).T
 
 ##################################################################################################################
 ##################################################################################################################
