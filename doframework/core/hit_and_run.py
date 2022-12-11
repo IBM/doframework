@@ -174,11 +174,12 @@ def in_domain(xs, A: np.array, R: Optional[float]=None, **kwargs) -> np.array:
     '''
     Check whether xs are inside the intersection of a convex polytope and a ball of radius R.
     The convex polytope is given by the matrix A such that Ax<=0 defines it.
+    When the radius is not specified, this restriction is dropped.
     
             Parameters:
                     xs (np.array): points.
                     A (np.array): matrix defining a convex polytope Ax <= 0.
-                    R (float): radius.
+                    R (float): radius (default: None).
                     
             Returns:
                     a boolean numpy array that indicates whether the points are inside the polytope.
