@@ -76,7 +76,7 @@ def parse_vertex_num(sim_input: dict) -> int:
     
     return num
 
-def get_configs(configs_file, is_logger: bool=True):
+def get_configs(configs_file, is_logger: bool=False):
 
     with open(configs_file,'r') as file:
         try:
@@ -86,7 +86,7 @@ def get_configs(configs_file, is_logger: bool=True):
             if is_logger:
                 print('({}) ERROR ... Could not load configs yaml. Check your path.'.format('root'))
                 print(e)
-            raise e        
+            raise e   
 
 def legit_configs(configs):
     
