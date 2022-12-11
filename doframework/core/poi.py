@@ -1,11 +1,25 @@
+#
+# Copyright IBM Corporation 2022
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+from typing import List
+
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
 from scipy.stats import multivariate_normal
 from GPy.models import GPRegression
-
-from dataclasses import dataclass
-from typing import List
 
 from doframework.core.utils import order_stats
 
@@ -33,23 +47,37 @@ def plot_joint_distribution(samples: np.array, **kwargs):
     sns.jointplot(data=df, x=cols[0], y=cols[1], kind="hex", xlim=lims, ylim=lims)
     sns.lineplot(data=dl, x=cols[0], y=cols[1])
 
-@dataclass
-class POI:
+class POI(object):
     '''
     Class for probability of improvement outcomes.
     '''
+    
+    def __init__(self, point: np.array, probability: float, **kwargs):
         
-    solution: np.array
-    reference: np.array
-    probability: float
-    is_minimum: bool
+        self.point = point
+        assert all([probability>=0.0,probability<=1.0]), f'Probability value should be in [0,1]. Received {probability:.2f}.'
+        self.probability = probability
+                                    
+        self.upper_bound = kwargs['upper_bound'] if 'upper_bound' in kwargs else True
+        self.reference = kwargs['reference'] if 'reference' in kwargs else np.array([])
+        self.threshold = kwargs['threshold'] if 'threshold' in kwargs else None
+            
+    def __repr__(self):
+        return 'POI('+''.join([f'point={self.point},',
+                                f' probability={self.probability},',
+                                f' upper_bound={self.upper_bound}',
+                                ','*any([self.reference.size > 0]),
+                                f' reference={self.reference}'*(self.reference.size > 0),
+                               ','*any([self.threshold is not None]),
+                                f' threshold={self.threshold}'*(self.threshold is not None)])+')'
 
 def probability_of_improvement(solutions: np.array, references: np.array, model: GPRegression,
-                               sample_num: int=100000, is_constraint: bool=False, is_minimum: bool=True, plot_joint_gaussians: bool=False,
+                               sample_num: int=100000, is_constraint: bool=False, upper_bound: bool=True, plot_joint_gaussians: bool=False,
                                **kwargs) -> List[POI]:
     
     sols = np.atleast_2d(solutions)
     d = sols.shape[-1]
+    is_minimum = not upper_bound
 
     if is_constraint:
 
@@ -81,8 +109,11 @@ def probability_of_improvement(solutions: np.array, references: np.array, model:
         else:
             mu, cov = model.predict(np.vstack([sols_rep[i],refs_rep[i]]),full_cov=True)
             samples = multivariate_normal(mean=mu.flatten(),cov=cov).rvs(size=sample_num)
-            
-        pois.append(POI(sols_rep[i],refs_rep[i],order_stats(samples,is_minimum),is_minimum))
+
+        if is_constraint:            
+            pois.append(POI(sols_rep[i],order_stats(samples,is_minimum),upper_bound=upper_bound,threshold=refs_rep[i]))
+        else:
+            pois.append(POI(sols_rep[i],order_stats(samples,is_minimum),upper_bound=upper_bound,reference=refs_rep[i]))
 
         if plot_joint_gaussians and not is_constraint:
 
