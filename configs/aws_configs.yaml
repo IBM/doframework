@@ -1,4 +1,4 @@
-local:
+s3:
   buckets: 
     inputs: ''
     inputs_dest: ''
@@ -7,3 +7,7 @@ local:
     data: ''
     data_dest: ''
     solutions: ''
+  aws_secret_access_key: ''
+  aws_access_key_id: ''
+  region: ''
+  cloud_service_provider: 'aws'
