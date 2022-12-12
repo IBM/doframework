@@ -24,7 +24,7 @@
 * D = (X,y) is a dataset derived from f,
 * x* is the true optimum of f in O (minimum or maximum).
 
-The testing framework feeds your algorithm constraints and data (O,D) and collects its predicted optimum. The algorithm's predicted optimal value can then be compared to the true optimal value f(x*). By comparing the two over multiple randomly generated optimization problems, `doframework` produces a **prediction profile** for your algorithm.
+`doframework` feeds your algorithm constraints and data (O,D) and collects its predicted optimum. The algorithm's predicted optimal value can then be compared to the true optimal value f(x*). By comparing the two over multiple randomly generated optimization problems, `doframework` produces a **prediction profile** for your algorithm.
 
 `doframework` integrates with your algorithm (written in Python).
 
@@ -40,7 +40,7 @@ The testing framework feeds your algorithm constraints and data (O,D) and collec
 
 `doframework` can run either locally or remotely. For optimal performance, run it on a Kubernetes cluster. Cloud configuration is currently available for AWS and IBM Cloud [OpenShift](https://docs.openshift.com/ "RedHat OpenShift Documentation") clusters.
 
-The framework relies on Cloud Object Storage (COS) to interact with simulation products. Configuration is currently available for [AWS](https://aws.amazon.com/s3/ "AWS S3") or [IBM COS](https://www.ibm.com/cloud/object-storage "IBM Cloud Object Storage").
+The framework uses storage (local or S3) to interact with simulation products. Configuration is currently available for [AWS](https://aws.amazon.com/s3/ "AWS S3") or [IBM Cloud Object Storage COS](https://www.ibm.com/cloud/object-storage "IBM Cloud Object Storage").
 
 # Install
 
@@ -52,14 +52,23 @@ $ pip install doframework
 
 # Configs
 
-COS specifications are provided in a `configs.yaml`. 
+Storage specifications are provided in a `configs.yaml`. You'll find examples under `./configs/*`.
 
-The `configs.yaml` includes the list of source and target bucket names (under `s3:buckets`). Credentials are added under designated fields.
+The `configs.yaml` includes the list of source and target bucket names (under `buckets`). If necessary, S3 credentials are added under designated fields.
 
-Currently, two cloud service providers are available under `s3:cloud_service_provider`: `aws` and `ibm`.
-
-`s3:endpoint_url` is optional for AWS.
-
+Here is the format of the `configs.yaml` either for local storage
+```
+local:
+    buckets:
+        inputs: '<inputs-folder>'
+        inputs_dest: '<inputs-dest-folder>'
+        objectives: '<objectives-folder>'
+        objectives_dest: '<objectives-dest-folder>'
+        data: '<data-folder>'
+        data_dest: '<data-dest-folder>'
+        solutions: '<solutions-folder>'
+```
+or S3
 ```
 s3:
     buckets:
@@ -75,19 +84,20 @@ s3:
     endpoint_url: 'https://xxx.xxx.xxx'
     region: 'xx-xxxx'
     cloud_service_provider: 'aws'
-
 ```
-**Bucket names above must be distinct**.
+Currently, two S3 providers are available under `s3:cloud_service_provider`: either `aws` or `ibm`. The `endpoint_url` is _optional_ for AWS.
+
+**Bucket / folder names must be distinct**.
 
 # Inputs
 
 `input.json` files provide the necessary metadata for the random genration of optimization problems.
 
-`doframework` will run end to end, once `input.json` files are uploaded to `<inputs_bucket>`. 
+`doframework` will run end to end, once `input.json` files are uploaded to `<inputs-bucket>` / `<inputs-folder>`. 
 
-The jupyter notebook `./notebooks/inputs.ipynb` allows you to automatically generate input files and upload them to `<inputs_bucket>`.
+The jupyter notebook `./notebooks/inputs.ipynb` allows you to automatically generate input files and upload them to `<inputs-bucket>`.
 
-Here is an example of an input file (see input samples `input_basic.json` and `input_all.json` under `./inputs`).
+Here is an example of an input file (see input samples `input_basic.json` under `./inputs`).
 
 
 ```
@@ -102,8 +112,7 @@ Here is an example of an input file (see input samples `input_basic.json` and `i
         },
     },
     "omega" : {
-        "ratio": 0.8,
-        "scale": 0.01
+        "ratio": 0.8
     },
     "data" : {
         "N": 750,
@@ -111,15 +120,14 @@ Here is an example of an input file (see input samples `input_basic.json` and `i
         "policy_num": 2,
         "scale": 0.4
     },
-    "input_file_name": "input.json"
+    "input_file_name": "input_basic.json"
 }
 ```
 
 `f:vertices:num`: number of vertices in the piece-wise linear graph of f.<br>
-`f:vertices:range`: f domain will be inside this box range.<br>
+`f:vertices:range`: f domain will be inside this range.<br>
 `f:values:range`: range of f values.<br>
 `omega:ratio`: vol(O) / vol(dom(f)) >= ratio.<br>
-`omega:scale`: scale of jitter when sampling feasibility regions (as a ratio of domain diameter).<br>
 `data:N`: number of data points to sample.<br>
 `data:noise`: response variable noise.<br>
 `data:policy_num`: number of centers in Gaussian mix distribution of data.<br>
@@ -129,11 +137,11 @@ It's a good idea to start experimenting on low-dimensional problems.
 
 # User App Integration
 
-Your algorithm will be integrated together with `doframework` once it is decorated with `doframework.resolve`. 
+Your algorithm will be integrated into `doframework` once it is decorated with `doframework.resolve`. 
 
-A `doframework` experiment runs with `doframework.run()`. The `run()` utility accepts the decorated model and a path to the `configs.yaml`.
+A `doframework` experiment runs with `doframework.run()`. The `run()` utility accepts the decorated model and an absolute path to the `configs.yaml`.
 
-Here is an example user application `module.py`.
+Here is an example a user application `module.py`.
 
 ```
 import doframework as dof
@@ -148,10 +156,13 @@ if __name__ == '__main__':
     dof.run(alg, 'configs.yaml', objectives=5, datasets=3, **kwargs)
 ```
 
-The testing framework supports the following inputs to your algorithm: 
+`doframework` provides the following inputs to your algorithm: 
 
 `data`: 2D np.array with features X = data[ : , :-1] and response variable y = data[ : ,-1].<br>
 `constraints`: linear constraints as a 2D numpy array A. A data point x satisfies the constraints when A[ : , :-1]*x + A[ : ,-1] <= 0.<br>
+
+It feeds your algorithm additional inputs in kwargs: 
+
 `lower_bound`: lower bound per feature variable.<br>
 `upper_bound`: upper bound per feature variable.<br>
 `init_value`: optional initial value.<br>
@@ -160,26 +171,28 @@ The `run()` utility accepts the arguments:
 
 `objectives`: number of objective targets to generate per input file.<br>
 `datasets`: number of datasets to generate per objective target.<br>
-`feasibility_regions`: number of feasibility regions to generate per objective and dataset.<br>
 `distribute`: True to run distributively, False to run sequentially.<br>
-`logger`: True to see logs, False otherwise.<br>
+`logger`: True to see `doframework` logs, False otherwise.<br>
 `after_idle_for`: stop running when event stream is idle after this many seconds.<br>
+`alg_num_cpus`: number of CPUs to dedicate to your algorithm on each optimization task.<br>
+`data_num_cpus`: number of CPUs to dedicate to data generation (useful in high dimensions).
+
 
 # Algorithm Prediction Profile
 
-Once you are done running a `doframework` experiment, run the notebook `notebooks/profile.ipynb`. It will fetch the relevant experiment products from the target COS buckets and produce the algorithm's prediction profile and prediction probabilities.
+Once you are done running a `doframework` experiment, run the notebook `notebooks/profile.ipynb`. It will fetch the relevant experiment products from the target buckets and produce the algorithm's prediction profile and prediction probabilities.
 
-`doframework` produces three types of experiment products files:
+`doframework` produces three types of experiment product files:
 
 * `objective.json`: containing information on (f,O,x*) 
 * `data.csv`: containing the dataset the algorithm accepts as input
 * `solution.json`: containing the algorithm's predicted optimum
 
-See sample files under `./outputs`/
+See sample files under `./outputs`.
 
 # Kubernetes Cluster
 
-To run `doframework` on a K8S cluster, make sure you are on the cluster's local `kubectl` context. Log into your cluster, if necessary (applicable to OpenShift, see doc).
+To run `doframework` on a K8S cluster, make sure you are on the cluster's local `kubectl` context. Log into your cluster, if necessary (applicable to OpenShift, see `./doc/openshift.md`).
 
 You can check your local `kubectl` context and change it if necessary with
 ```
@@ -189,7 +202,7 @@ $ kubectl config use-context cluster_name
 >> Switched to context "cluster_name".
 ```
 
-Now `cd` into your project's folder and run the setup bash script `doframework-setup.sh`. The setup script will generate the cluster configuration file `doframework.yaml` in your project's folder. The setup script requires the absolute path to your `configs.yaml`. Otherwise, it assumes a file `configs.yaml` is located under your project's folder. Running the setup script will establish the `ray` cluster. 
+Now `cd` into your project's folder and run the setup bash script `doframework-setup.sh`. The setup script will generate the cluster configuration file `doframework.yaml` in your project's folder. The setup script requires the absolute path to your `configs.yaml`. Running the setup `.sh` script will establish the `ray` cluster. 
 
 ```
 $ cd <user_project_folder>
@@ -220,7 +233,7 @@ $ ray submit doframework.yaml module.py
 
 # Ray Cluster
 
-To observe the `ray` dashboard, connect to `http://localhost:8265` in your browser. See the OpenShift doc for OpenShift-specific instructions.
+To observe the `ray` dashboard, connect to `http://localhost:8265` in your browser. See `./doc/openshift.md` for OpenShift-specific instructions.
 
 Some useful health-check commands: 
 
@@ -276,5 +289,5 @@ $ ray submit doframework.yaml doframework_example.py --configs configs.yaml
 ```
 [NOTE: we are using the path to the `configs.yaml` that was mounted on cluster nodes under `$HOME`.]
 
-Make sure to upload input json files to `<inputs_bucket>` once you run `doframework_example.py`.
+Make sure to upload input json files to `<inputs-bucket>` / `<inputs-folder>` once you run `doframework_example.py`.
 
