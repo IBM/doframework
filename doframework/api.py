@@ -1,5 +1,3 @@
-import os
-import yaml
 import json
 from io import StringIO
 from collections import namedtuple
