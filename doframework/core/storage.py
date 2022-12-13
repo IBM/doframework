@@ -15,6 +15,8 @@
 #
 
 from dataclasses import dataclass, field
+from typing import Optional
+from itertools import islice
 import os
 import json
 from pathlib import Path
@@ -152,3 +154,26 @@ class Storage:
             n = len(objects)
 
         return n
+
+    def get_all(self,bucket,extension,limit: Optional[int]=None):        
+        assert bucket in self.storage_buckets.values(), \
+        'The bucket you provided is not on the storage bucket list. Find the list by running storage.buckets().'
+        assert extension in ['json','csv'], \
+        'get_all method retrieves either json or csv files in given bucket. provide either extension=`json` or extension=`csv`.'
+
+        objects = []
+        
+        if bucket in self.storage_buckets.values():       
+            if 's3' in self.configs:
+                if limit:
+                    objects = [f for f in _get_s3_object(self.configs).Bucket(bucket).objects.all().limit(limit) if f.key.endswith(extension)]
+                else:
+                    objects = [f for f in _get_s3_object(self.configs).Bucket(bucket).objects.all() if f.key.endswith(extension)]
+            if 'local' in self.configs:
+                if limit:
+                    objects = [f for f in islice(Path(bucket).iterdir(),limit) if Path(f).suffix in [f'.{extension}']]
+                else:
+                    objects = [f for f in Path(bucket).rglob('*') if Path(f).suffix in [f'.{extension}']]
+                
+        return objects
+    
