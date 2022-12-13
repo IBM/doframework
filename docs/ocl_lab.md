@@ -24,18 +24,18 @@ We recommend installing `doframework` on a designated Python 3.8.0 environment. 
 
 For example, if you're using `pyenv` in combination with `virtualenv` as your Python environment manager, you can type the following in your terminal
 ```
-$ pyenv virtualenv 3.8.0 dof
-$ pyenv local dof
+pyenv virtualenv 3.8.0 dof
+pyenv local dof
 ```
 [Here](https://realpython.com/intro-to-pyenv/#virtual-environments-and-pyenv "pyenv and virtualenv") is a good source on `pyenv` and `virtualenv` by Logan Jones.
 
 Now that you've set up a dedicated Python environment, simply install
 ```
-$ pip install doframework
+pip install doframework
 ```
 Run a simple sanity check with
 ```
-$ python
+python
 >>> import doframework
 >>> exit()
 ```
@@ -46,15 +46,15 @@ The import command may take a while. Once it's finished (successfully, hopefully
 We will be running `doframework` Jupyter Notebooks as well as using other `doframework` material. Therefore, we'll clone a local copy of `doframework`. From your terminal, run
 
 ```
-$ git clone https://github.com/IBM/doframework.git
+git clone https://github.com/IBM/doframework.git
 ```
 To launch the OCL lab Jupyter Notebooks, we'll need to add `jupyter` to our new Python environment
 ```
-$ pip install jupyter
+pip install jupyter
 ```
 Note that `jupyter` does not come with `doframework`. We want to keep `doframework` light for cloud distribution. Once we're done installing `jupyter`, let's launch the OCL Lab notebooks
 ```
-$ cd doframework/notebooks
-$ jupyter notebook
+cd doframework/notebooks
+jupyter notebook
 ```
 Now we can begin ...
